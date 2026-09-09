@@ -25,7 +25,7 @@ def sync(source_name: str | None = None, filter: dict | None = None, only_scopes
             if not src.configured():
                 report[f"{scope}/{name}"] = {"skipped": f"{name} not configured"}
                 continue
-            ctx = ScopeContext(scope=scope, config=cfg, repos=sc.get("repos", []))
+            ctx = ScopeContext(scope=scope, config=cfg, repos=scopes.code_repos(scope))
             prefix = f"{name}:{scope}:"
             seen, changed, removed = set(), 0, 0
             for doc in src.documents(ctx, filter):

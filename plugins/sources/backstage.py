@@ -9,7 +9,7 @@ sources: option backstage: { url: ... }   (optional, overrides BACKSTAGE_URL)
 """
 import hashlib
 import httpx
-from .base import Source, Document, ScopeContext
+from ingest.sources import Source, Document, ScopeContext
 
 DEFAULT_KINDS = ["Component", "System", "API", "Domain", "Resource", "Group"]
 

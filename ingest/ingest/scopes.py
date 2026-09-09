@@ -10,6 +10,11 @@ def lightrag_url(scope: str) -> str:
     return os.environ.get("LIGHTRAG_URL_TEMPLATE", "http://lightrag-{scope}:9621").format(scope=scope)
 
 
+def code_repos(scope: str) -> list[str]:
+    """`code: { repos: [...] }` — shared by Sourcebot, CodeGraphContext and the git docs plugin."""
+    return list((SCOPES[scope].get("code") or {}).get("repos") or [])
+
+
 def docs_config(scope: str) -> dict[str, dict]:
     """adapter name -> its config for this scope. `docs: {backstage: ~}` means {} ."""
     return {name: (cfg or {}) for name, cfg in (SCOPES[scope].get("docs") or {}).items()}
@@ -28,7 +33,7 @@ def validate() -> None:
     """A Confluence space or repo must belong to exactly one scope (they are the isolation unit)."""
     seen: dict[tuple, str] = {}
     for scope, sc in SCOPES.items():
-        for r in sc.get("repos", []):
+        for r in code_repos(scope):
             k = ("repo", r.rstrip("/").removesuffix(".git").lower())
             if k in seen and seen[k] != scope:
                 raise ValueError(f"repo {r} is listed in scopes {seen[k]} and {scope}")

@@ -1,21 +1,15 @@
-# plugins/ — drop-in document source adapters
+# plugins/ — every source is a plugin
 
-Every `*.py` file here is loaded by the ingest service at startup (mounted at `/plugins`); each `Source` subclass in
-it becomes available under its `name`, with no registration and no image rebuild. Reference it from a scope in
-`config/scopes.yaml`:
+Nothing that reads a source is built into the ingest or the gateway. Confluence, Backstage, git docs and local
+files ship here as ordinary plugin files, and org-specific sources (JAMA, SharePoint, an internal API) are added the
+same way: one file, auto-discovered, no rebuild.
 
-```yaml
-scopes:
-  payments:
-    docs:
-      jama: { projects: [42] }        # <- adapter name, adapter-specific config
-```
+| Directory | Loaded by | Base class | Referenced from `config/scopes.yaml` |
+|---|---|---|---|
+| `plugins/sources/` | ingest (`/plugins/sources`) | `ingest.sources.Source` | a scope's `docs:` entry, by `name` |
+| `plugins/live/` | gateway (`/plugins/live`) | `gateway.live.LiveSource` | the top-level `live:` map, by `name` |
 
-Secrets come from the environment (`config/stack.env`), non-secret options from an optional top-level `sources:`
-entry. `jama.py` is a complete example. Develop against a real system without touching LightRAG:
-
-```sh
-make source-check SCOPE=payments SOURCE=jama
-```
-
-Contract and rules: `ingest/ingest/sources/base.py`; walkthrough: `docs/SOURCES.md`.
+Shipped: `sources/confluence.py`, `sources/backstage.py`, `sources/git.py`, `sources/files.py`, `sources/jama.py`
+(unverified example), `live/confluence.py` (REST or upstream MCP). Secrets come from `config/stack.env`; non-secret
+options from `sources:` / `live:`. Develop an ingest adapter without LightRAG: `make source-check SCOPE=... SOURCE=...`.
+Contract and walkthrough: `docs/SOURCES.md`.

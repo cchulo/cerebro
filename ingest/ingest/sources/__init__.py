@@ -1,9 +1,9 @@
-"""Adapter registry with three discovery paths, so adding a source never means editing this package:
+"""Adapter registry. The engine ships no privileged sources: confluence, backstage, git and files are plugin files
+like any other (plugins/sources/). Two discovery paths, so adding a source never means editing this package:
 
-1. built-ins in this package (confluence, backstage, git, files);
-2. plugin files: every ``*.py`` in ``INGEST_PLUGINS_DIR`` (default ``/plugins``, mounted from the repo's ``plugins/``)
-   is imported and each ``Source`` subclass with a ``name`` is registered;
-3. installed packages that declare an entry point in group ``context_stack.sources``
+1. plugin files: every ``*.py`` in ``INGEST_PLUGINS_DIR`` (default ``/plugins/sources``) is imported and each
+   ``Source`` subclass with a ``name`` is registered;
+2. installed packages that declare an entry point in group ``context_stack.sources``
    (``[project.entry-points."context_stack.sources"] jama = "my_pkg.jama:JamaSource"``).
 
 A scope then just references the adapter by name under ``docs:``. The optional top-level ``sources:`` map in
@@ -12,10 +12,6 @@ explicit class (``type: "pkg.mod:Class"``).
 """
 import importlib, importlib.metadata, importlib.util, inspect, logging, os, pathlib, sys
 from .base import Source, Document, ScopeContext
-from .confluence import ConfluenceSource
-from .backstage import BackstageSource
-from .git import GitDocsSource
-from .files import FilesSource
 
 log = logging.getLogger("ingest.sources")
 REGISTRY: dict[str, type[Source]] = {}
@@ -43,9 +39,7 @@ def _register_module(mod, origin: str) -> int:
 
 def discover() -> None:
     """Load plugin files and entry points. Safe to call more than once."""
-    for cls in (ConfluenceSource, BackstageSource, GitDocsSource, FilesSource):
-        register(cls, "builtin")
-    plugins = pathlib.Path(os.environ.get("INGEST_PLUGINS_DIR", "/plugins"))
+    plugins = pathlib.Path(os.environ.get("INGEST_PLUGINS_DIR", "/plugins/sources"))
     if plugins.is_dir():
         if str(plugins) not in sys.path:
             sys.path.insert(0, str(plugins))            # plugins may import sibling helper modules
@@ -88,7 +82,7 @@ def load(name: str, declared: dict | None = None) -> Source:
         klass = REGISTRY[type_]
     else:
         raise KeyError(f"unknown source '{name}' (type '{type_}'); available: {sorted(REGISTRY)}. "
-                       f"Drop a plugin into {os.environ.get('INGEST_PLUGINS_DIR', '/plugins')} or install a package "
+                       f"Drop a plugin into {os.environ.get('INGEST_PLUGINS_DIR', '/plugins/sources')} or install a package "
                        f"with a context_stack.sources entry point.")
     inst = klass(spec)
     inst.name = name

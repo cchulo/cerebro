@@ -40,7 +40,7 @@ async def call(url, user, groups, tool, args):
             return res.isError, data, text
 
 async def main(url, live):
-    private_repos = CFG["scopes"][PRIVATE]["repos"]
+    private_repos = CFG["scopes"][PRIVATE]["code"]["repos"]
 
     print("no-group user (alice)")
     err, a, _ = await call(url, "alice", [], "list_scopes", {})
@@ -95,6 +95,27 @@ async def main(url, live):
         srcs = [r["source"] for res in d["results"] for r in res.get("references", [])] if not err else []
         check(not err and "RESTRICTED-QX-9911" not in t and "confluence:payments:PAY/3002" not in srcs,
               f"restricted page was never indexed (refs: {srcs})")
+
+        # live sources (system of record through the gateway, same scopes): PAY page 3001 has ZEPHYR-7731, 3002 is restricted
+        err, d, t = await call(url, "alice", [], "live_search", {"source": "confluence", "query": "settlement"})
+        if err and "not enabled" in t:
+            print(f"  skip live_search: {t[:80]}")
+        else:
+            check(not err and all(r["space"] != "PAY" for r in d["results"]), f"alice live_search never returns PAY ({[r['space'] for r in d['results']] if not err else t[:80]})")
+            err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "live_search", {"source": "confluence", "query": "settlement"})
+            check(not err and any(r["ref"] == "3001" for r in d2["results"]), f"bob live_search finds PAY page 3001 ({t[:80]})")
+            err, d3, t = await call(url, "bob", [PRIVATE_GROUP], "live_search", {"source": "confluence", "query": "manual review threshold"})
+            check(not err and all(r["ref"] != "3002" for r in d3["results"]), "restricted page 3002 never appears in live_search")
+            err, _, t = await call(url, "alice", [], "live_fetch", {"source": "confluence", "ref": "3001"})
+            check(err and "outside your scopes" in t, f"alice live_fetch of a PAY page refused: {t[:80]}")
+            err, d4, t = await call(url, "bob", [PRIVATE_GROUP], "live_fetch", {"source": "confluence", "ref": "3001"})
+            check(not err and "ZEPHYR-7731" in d4["text"], f"bob live_fetch reads PAY page 3001")
+            err, _, t = await call(url, "bob", [PRIVATE_GROUP], "live_fetch", {"source": "confluence", "ref": "3002"})
+            check(err and ("restriction" in t or "outside" in t), f"restricted page 3002 refused even for bob: {t[:80]}")
+            # automatic fallback: a miss in the index consults the live source for the same scopes
+            err, d5, t = await call(url, "bob", [PRIVATE_GROUP], "query_docs", {"query": "settlement code ZEPHYR", "scopes": [PRIVATE], "fallback": True})
+            check(not err and (d5["results"][0].get("indexed_answer") or "confluence" in d5.get("fallback", {})),
+                  f"query_docs answered from index or fell back to confluence (fallback keys: {list(d5.get('fallback', {})) if not err else t[:60]})")
 
         # code search isolation: jinja is in the payments scope
         err, d, t = await call(url, "alice", [], "search_code", {"query": "class Environment lang:python", "max_results": 10})

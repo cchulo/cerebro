@@ -1,11 +1,15 @@
-# Access scopes = the isolation unit for documents AND code.
-# A document or repo is indexed into exactly one scope. A user can query a scope only if they are in one of its groups.
-# Groups come from your IdP via the reverse proxy (X-Forwarded-Groups); "everyone" is granted to all authenticated users.
+# Access scopes = the ONE isolation unit for documents AND code.
+# A scope names the IdP groups allowed to read it, the code it covers and the documents it covers. A repo, space or
+# project belongs to exactly one scope. A user can use a scope only if they are in one of its groups; that single
+# decision drives query_docs, live_search/live_fetch, search_code and code_graph alike.
 #
-# Each scope gets its own LightRAG instance (docs graph) and its own FalkorDB + CodeGraphContext (code graph).
-# Sourcebot stays a single instance; the gateway restricts searches to the repos of the caller's scopes.
+# Per scope the stack runs its own LightRAG (docs graph) and its own FalkorDB + CodeGraphContext (code graph).
+# Sourcebot stays a single instance; the gateway restricts every search to the repos of the caller's scopes.
 #
-# The values below are a working example: public GitHub repos and the fixture spaces served by compose.test.yaml.
+# Everything that reads a source is a plugin under plugins/ (nothing is built in):
+#   plugins/sources/*.py  ingest adapters, referenced by name under a scope's `docs:`   (docs/SOURCES.md)
+#   plugins/live/*.py     query-time fallbacks, enabled under the top-level `live:`
+# The values below are a working example: public GitHub repos and the fixture spaces served by the test environment.
 
 identity:
   user_header: X-Forwarded-User        # set by oauth2-proxy / Authelia / Caddy OIDC
@@ -13,19 +17,24 @@ identity:
   always_groups: [everyone]
   team_banks_from_groups: true         # group "payments-team" -> shared Hindsight bank "team-payments-team"
 
-# Document source adapters. Built-ins: confluence, backstage, git, files. Any *.py dropped into plugins/ (see
-# plugins/README.md, plugins/jama.py) or any installed package with a `context_stack.sources` entry point adds more,
-# with no declaration here. This optional map only carries non-secret adapter options (secrets stay in stack.env):
+# Non-secret options for ingest adapters (secrets stay in config/stack.env). Optional; adapters need no declaration.
 #   jama: { url: https://jama.internal, page_size: 100 }
 sources: {}
+
+# Query-time fallbacks against the system of record, confined to the same per-scope `docs:` entries.
+# query_docs consults them automatically when a scope's index has no answer (fallback: true, the default);
+# live_search / live_fetch expose them directly.
+live:
+  confluence: { via: rest }            # or: { via: mcp, url: http://mcp-atlassian:9000/mcp, auth_env: ATLASSIAN_MCP_TOKEN }
 
 scopes:
   public:
     groups: [everyone]
-    repos:                             # code -> Sourcebot + CodeGraphContext; docs inside them -> `git` adapter
-      - https://github.com/pallets/click.git
-      - https://github.com/pallets/flask.git
-    docs:                              # document sources -> this scope's LightRAG (adapter name -> its config)
+    code:                              # Sourcebot search, CodeGraphContext graph, and the `git` docs plugin
+      repos:
+        - https://github.com/pallets/click.git
+        - https://github.com/pallets/flask.git
+    docs:                              # adapter name -> what of that source belongs to this scope
       confluence: { spaces: [ENG, DOCS] }
       backstage: {}                    # whole catalog (org-wide metadata)
       git: { globs: [README.md, "docs/**/*.md", "docs/**/*.rst"] }
@@ -33,16 +42,18 @@ scopes:
 
   payments:
     groups: [payments-team, platform-leads]
-    repos:
-      - https://github.com/pallets/jinja.git
+    code:
+      repos:
+        - https://github.com/pallets/jinja.git
     docs:
       confluence: { spaces: [PAY] }
       git: {}
 
   infra:
     groups: [sre, platform-leads]
-    repos:
-      - https://github.com/pallets/werkzeug.git
+    code:
+      repos:
+        - https://github.com/pallets/werkzeug.git
     docs:
       confluence: { spaces: [OPS] }
       git: {}

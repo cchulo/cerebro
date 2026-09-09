@@ -24,7 +24,7 @@ def main() -> int:
     print(f"{a.source}: configured={src.configured()} options={src.options} scope-config={cfg}")
     if not src.configured():
         return 2
-    ctx = ScopeContext(scope=a.scope, config=cfg, repos=scopes.SCOPES[a.scope].get("repos", []))
+    ctx = ScopeContext(scope=a.scope, config=cfg, repos=scopes.code_repos(a.scope))
     flt = json.loads(a.filter) if a.filter else None
     t0, n, chars = time.monotonic(), 0, 0
     for doc in src.documents(ctx, flt):

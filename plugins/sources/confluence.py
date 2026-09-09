@@ -10,7 +10,7 @@ index cannot filter per page afterwards (docs/ACCESS-CONTROL.md).
 """
 import httpx
 from markdownify import markdownify
-from .base import Source, Document, ScopeContext
+from ingest.sources import Source, Document, ScopeContext
 
 
 class ConfluenceSource(Source):

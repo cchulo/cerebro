@@ -14,6 +14,7 @@ GROUPS_HDR = IDENT.get("groups_header", "X-Forwarded-Groups").lower()
 ALWAYS = set(IDENT.get("always_groups", ["everyone"]))
 TEAM_BANKS = IDENT.get("team_banks_from_groups", True)
 SCOPES: dict[str, dict] = CFG["scopes"]
+LIVE: dict[str, dict] = {k: (v or {}) for k, v in (CFG.get("live") or {}).items()}   # enabled live sources
 
 @dataclass
 class Caller:
@@ -31,7 +32,12 @@ class Caller:
 
     @property
     def repos(self) -> list[str]:
-        return [r for s in self.scopes for r in SCOPES[s].get("repos", [])]
+        return [r for s in self.scopes for r in scope_repos(s)]
+
+def scope_repos(scope: str) -> list[str]:
+    """A scope's code repositories: `code: { repos: [...] }` (Sourcebot, CodeGraphContext and the git docs plugin)."""
+    return list((SCOPES[scope].get("code") or {}).get("repos") or [])
+
 
 def caller_from_headers(headers) -> Caller:
     user = headers.get(USER_HDR)
@@ -40,6 +46,17 @@ def caller_from_headers(headers) -> Caller:
     groups = {g.strip() for g in headers.get(GROUPS_HDR, "").split(",") if g.strip()} | ALWAYS
     scopes = [name for name, sc in SCOPES.items() if groups & set(sc.get("groups", []))]
     return Caller(user=user, groups=groups, scopes=scopes)
+
+def live_allowed(caller: Caller, source: str, scopes: list[str] | None = None) -> list[dict]:
+    """Per allowed scope, the caller's `docs:` config for `source` -> what a live source may touch."""
+    out = []
+    for s in (scopes or caller.scopes):
+        check_scope(caller, s)
+        cfg = (SCOPES[s].get("docs") or {}).get(source)
+        if cfg is not None:
+            out.append({"scope": s, **(cfg or {})})
+    return out
+
 
 def check_scope(caller: Caller, scope: str) -> None:
     if scope not in caller.scopes:

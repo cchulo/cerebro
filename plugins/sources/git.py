@@ -9,7 +9,7 @@ Webhook filter: {"repo": "https://github.com/org/x.git"}
 """
 import hashlib, os, subprocess, tempfile
 from pathlib import Path
-from .base import Source, Document, ScopeContext
+from ingest.sources import Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["README.md", "docs/**/*.md", "adr/**/*.md", "runbooks/**/*.md"]
 

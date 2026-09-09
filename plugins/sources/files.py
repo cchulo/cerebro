@@ -5,7 +5,7 @@ Scope config:  docs: { files: { paths: ["/data/docs/public"], globs: ["**/*.md",
 """
 import hashlib
 from pathlib import Path
-from .base import Source, Document, ScopeContext
+from ingest.sources import Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["**/*.md", "**/*.markdown", "**/*.txt", "**/*.rst"]
 
