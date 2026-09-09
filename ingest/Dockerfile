@@ -1,8 +1,10 @@
 FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements.txt .
+COPY ingest/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY ingest ./ingest
+COPY sdk /opt/sdk
+RUN pip install --no-cache-dir /opt/sdk        # stack_plugins: the plugin framework
+COPY ingest/ingest ./ingest
 EXPOSE 8080
 CMD ["uvicorn", "ingest.main:app", "--host", "0.0.0.0", "--port", "8080"]

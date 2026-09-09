@@ -124,7 +124,7 @@ async def _fallback_search(c: acl.Caller, query: str, scopes: list[str]) -> dict
     """Live sources with fallback enabled, searched for the scopes whose index missed."""
     hits = {}
     query = _keywords(query)
-    for name, opts in acl.LIVE.items():
+    for name, opts in live.enabled(acl.LIVE).items():
         if opts.get("fallback", True) is False:
             continue
         allowed = acl.live_allowed(c, name, scopes)
@@ -142,11 +142,12 @@ async def _fallback_search(c: acl.Caller, query: str, scopes: list[str]) -> dict
 
 # ----------------------------------------------------------------------------- live sources
 def _live(name: str) -> live.LiveSource:
-    if name not in acl.LIVE:
-        raise PermissionError(f"live source '{name}' is not enabled; enabled: {sorted(acl.LIVE)}")
-    src = live.load(name, acl.LIVE[name])
+    on = live.enabled(acl.LIVE)
+    if name not in on:
+        raise PermissionError(f"no enabled live fallback named '{name}'; enabled: {sorted(on)}")
+    src = live.load(name, on[name])
     if not src.configured():
-        raise RuntimeError(f"live source '{name}' is enabled but not configured (missing credentials)")
+        raise RuntimeError(f"live fallback '{name}' is not configured (missing credentials or upstream url)")
     return src
 
 @mcp.tool()

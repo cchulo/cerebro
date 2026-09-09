@@ -1,59 +1,49 @@
-"""Registry for live sources: every *.py in GATEWAY_PLUGINS_DIR (default /plugins/live); nothing is built in.
-Enabled per deployment by the top-level `live:` map in config/scopes.yaml:
-    live:
-      confluence: {}                       # plugins/live/confluence.py, credentials from env
-      jama: { url: https://jama.internal } # a plugin in plugins/live/jama.py
-Scopes decide what each caller may reach through the same `docs:` entries the ingest uses.
+"""Gateway-side plugin registry: the `live` part of every plugin found by stack_plugins.discover(PLUGINS_DIR).
+A plugin that ships a live part is enabled as a fallback by default; the optional top-level `live:` map in
+config/scopes.yaml only carries per-plugin overrides: { enabled: false } | { fallback: false } | { via: rest } |
+{ url: ..., auth_env: ... } | tool/argument names.
 """
-import importlib.util, inspect, logging, os, pathlib, sys
-from .base import LiveSource
+import importlib, logging
+import stack_plugins
+from stack_plugins import LiveSource, Plugin
 
 log = logging.getLogger("gateway.live")
-REGISTRY: dict[str, type[LiveSource]] = {}
+PLUGINS: dict[str, Plugin] = {}
 _instances: dict[str, LiveSource] = {}
 
 
-def _register_module(mod, origin: str) -> None:
-    for _, obj in inspect.getmembers(mod, inspect.isclass):
-        if issubclass(obj, LiveSource) and obj is not LiveSource and obj.__module__ == mod.__name__ and obj.name != "base":
-            REGISTRY[obj.name] = obj
-            log.info("live source '%s' from %s", obj.name, origin)
-
-
 def discover() -> None:
-    d = pathlib.Path(os.environ.get("GATEWAY_PLUGINS_DIR", "/plugins/live"))
-    if d.is_dir():
-        if str(d) not in sys.path:
-            sys.path.insert(0, str(d))
-        for f in sorted(d.glob("*.py")):
-            if f.name.startswith("_"):
-                continue
-            try:
-                spec = importlib.util.spec_from_file_location(f"live_plugins.{f.stem}", f)
-                mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-                _register_module(mod, f"plugin {f.name}")
-            except Exception:
-                log.exception("live plugin %s failed to load; skipped", f.name)
+    PLUGINS.update({n: p for n, p in stack_plugins.discover().items() if p.live is not None})
 
 
-def load(name: str, declared: dict | None = None) -> LiveSource:
+def enabled(overrides: dict[str, dict]) -> dict[str, dict]:
+    """name -> options for every live-capable plugin not switched off. `overrides` = the `live:` map."""
+    if not PLUGINS:
+        discover()
+    out = {}
+    for name in PLUGINS:
+        opts = dict(overrides.get(name) or {})
+        if opts.pop("enabled", True) is not False:
+            out[name] = opts
+    return out
+
+
+def load(name: str, options: dict | None = None) -> LiveSource:
     if name in _instances:
         return _instances[name]
-    if not REGISTRY:
+    if not PLUGINS:
         discover()
-    spec = dict(declared or {})
-    type_ = spec.pop("type", name)
-    if ":" in type_:
-        mod, cls = type_.split(":", 1)
-        klass = getattr(importlib.import_module(mod), cls)
-    elif type_ in REGISTRY:
-        klass = REGISTRY[type_]
+    spec = dict(options or {}); spec.pop("enabled", None); spec.pop("fallback", None)
+    type_ = spec.pop("type", None)
+    if type_ and ":" in type_:
+        mod, cls = type_.split(":", 1); klass = getattr(importlib.import_module(mod), cls)
+    elif name in PLUGINS:
+        klass = PLUGINS[name].live
     else:
-        raise KeyError(f"unknown live source '{name}'; available: {sorted(REGISTRY)}")
-    inst = klass(spec)
-    inst.name = name
+        raise KeyError(f"no plugin with a live part named '{name}'; available: {sorted(PLUGINS)}")
+    inst = klass(spec); inst.name = name
     _instances[name] = inst
     return inst
 
 
-__all__ = ["LiveSource", "REGISTRY", "discover", "load"]
+__all__ = ["LiveSource", "PLUGINS", "discover", "enabled", "load"]

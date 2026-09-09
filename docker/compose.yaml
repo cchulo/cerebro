@@ -121,7 +121,7 @@ services:
 
   # ------------------------------------------------------------------ ingest (Confluence / Backstage / Git docs -> LightRAG)
   ingest:
-    build: ../ingest
+    build: { context: .., dockerfile: ingest/Dockerfile }
     restart: unless-stopped
     environment:
       SCOPES_FILE: /config/scopes.yaml
@@ -137,11 +137,11 @@ services:
       INGEST_WEBHOOK_SECRET: ${INGEST_WEBHOOK_SECRET}
       INGEST_SCHEDULE_CRON: ${INGEST_SCHEDULE_CRON}
       STATE_DIR: /state
-      INGEST_PLUGINS_DIR: /plugins/sources
+      PLUGINS_DIR: /plugins
     volumes:
       - ingest_state:/state
       - ../config/scopes.yaml:/config/scopes.yaml:ro
-      - ../plugins:/plugins:ro            # drop-in source adapters (plugins/README.md)
+      - ../plugins:/plugins:ro            # every source is a plugin (docs/PLUGINS.md)
     ports:
       - "127.0.0.1:8080:8080"   # POST /webhook/{confluence|backstage|git}, POST /sync/{source}, GET /health
 
@@ -149,7 +149,7 @@ services:
   # Enforces scopes per caller. Must sit behind an SSO reverse proxy that sets X-Forwarded-User / X-Forwarded-Groups;
   # never publish 8090 beyond the proxy. See docs/ACCESS-CONTROL.md.
   gateway:
-    build: ../mcp/gateway
+    build: { context: .., dockerfile: mcp/gateway/Dockerfile }
     restart: unless-stopped
     depends_on:
       hindsight: { condition: service_started }
@@ -162,11 +162,12 @@ services:
       SOURCEBOT_API_KEY: ${SOURCEBOT_API_KEY}
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
       PORT: 8090
-      # live sources (live_search / live_fetch): same credentials as the ingest, confined per scope by the gateway
+      # live fallbacks (plugins' live part): same credentials as the ingest, confined per scope by the gateway;
+      # generated mcp-<plugin> upstreams (docker/compose.scopes.yaml) are declared by the plugins themselves
       CONFLUENCE_URL: ${CONFLUENCE_URL}
       CONFLUENCE_USER: ${CONFLUENCE_USER}
       CONFLUENCE_TOKEN: ${CONFLUENCE_TOKEN}
-      GATEWAY_PLUGINS_DIR: /plugins/live
+      PLUGINS_DIR: /plugins
     volumes:
       - ../config/scopes.yaml:/config/scopes.yaml:ro
       - ../plugins:/plugins:ro

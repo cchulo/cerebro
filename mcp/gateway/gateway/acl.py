@@ -14,7 +14,7 @@ GROUPS_HDR = IDENT.get("groups_header", "X-Forwarded-Groups").lower()
 ALWAYS = set(IDENT.get("always_groups", ["everyone"]))
 TEAM_BANKS = IDENT.get("team_banks_from_groups", True)
 SCOPES: dict[str, dict] = CFG["scopes"]
-LIVE: dict[str, dict] = {k: (v or {}) for k, v in (CFG.get("live") or {}).items()}   # enabled live sources
+LIVE: dict[str, dict] = {k: (v or {}) for k, v in (CFG.get("live") or {}).items()}   # per-plugin overrides for live fallbacks
 
 @dataclass
 class Caller:
