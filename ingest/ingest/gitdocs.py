@@ -19,6 +19,7 @@ def sync_repo(url: str) -> dict:
     scope = scopes.scope_for_repo(url)
     if not scope:
         return {"repo": name, "skipped": "repo not listed in any scope"}
+    batch, new_state, drop = lightrag.Batch(scope), {}, set()
     changed, seen = 0, set()
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["git", "clone", "--depth", "1", "--quiet", _auth(url), tmp], check=True)
@@ -34,14 +35,15 @@ def sync_repo(url: str) -> dict:
             if state.get(key) == version:
                 continue
             header = f"Repository: {name}\nFile: {rel}\nURL: {url}\n\n"
-            lightrag.delete_by_source(scope, key)
-            lightrag.upsert_text(scope, key, header + text, title=f"{name}/{rel}")
-            state.set(key, version); changed += 1
+            batch.upsert(key, header + text, title=f"{name}/{rel}")
+            new_state[key] = version; changed += 1
     removed = 0
     for key in state.keys_with_prefix(f"git:{name}:"):
         if key not in seen:
-            lightrag.delete_by_source(scope, key); state.delete(key); removed += 1
-    return {"repo": name, "scope": scope, "changed": changed, "removed": removed}
+            batch.delete(key); drop.add(key); removed += 1
+    flushed = batch.flush()
+    state.commit(new_state, drop)
+    return {"repo": name, "scope": scope, "changed": changed, "removed": removed, "lightrag": flushed}
 
 def sync(repos: list[str] | None = None) -> dict:
     return {"repos": [sync_repo(u) for u in (repos or [r for r, _ in scopes.all_repos()])]}

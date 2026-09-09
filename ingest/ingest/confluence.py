@@ -32,6 +32,7 @@ def _is_restricted(p: dict) -> bool:
 def sync(space_filter: list[str] | None = None) -> dict:
     if not (CONFLUENCE_URL and CONFLUENCE_TOKEN):
         return {"skipped": "confluence not configured"}
+    batches, new_state, drop = lightrag.Batches(), {}, set()
     changed, skipped_restricted, seen = 0, 0, set()
     spaces = [(sp, sc) for sp, sc in scopes.all_spaces() if not space_filter or sp in space_filter]
     with _client() as c:
@@ -42,7 +43,7 @@ def sync(space_filter: list[str] | None = None) -> dict:
                     if scopes.RESTRICTED_PAGES == "skip":
                         skipped_restricted += 1
                         if state.get(key):                 # was public before, now restricted -> remove
-                            lightrag.delete_by_source(scope, key); state.delete(key)
+                            batches[scope].delete(key); drop.add(key)
                         continue
                     scope = f"restricted-{p['id']}"        # own_scope mode (needs a matching instance)
                 seen.add(key)
@@ -52,15 +53,16 @@ def sync(space_filter: list[str] | None = None) -> dict:
                 crumbs = " / ".join(a["title"] for a in p.get("ancestors", []))
                 md = markdownify(p["body"]["storage"]["value"], heading_style="ATX")
                 header = f"Space: {space}\nPath: {crumbs} / {p['title']}\nURL: {CONFLUENCE_URL}{p['_links']['webui']}\n\n"
-                lightrag.delete_by_source(scope, key)
-                lightrag.upsert_text(scope, key, header + md, title=p["title"])
-                state.set(key, version); changed += 1
+                batches[scope].upsert(key, header + md, title=p["title"])
+                new_state[key] = version; changed += 1
     removed = 0
     for key in state.keys_with_prefix("confluence:"):
         space = key.split(":")[1]
         if key not in seen and (not space_filter or space in space_filter):
             scope = scopes.scope_for_space(space)
             if scope:
-                lightrag.delete_by_source(scope, key)
-            state.delete(key); removed += 1
-    return {"changed": changed, "removed": removed, "skipped_restricted": skipped_restricted}
+                batches[scope].delete(key)
+            drop.add(key); removed += 1
+    flushed = batches.flush()                              # raises before state is touched if LightRAG refused
+    state.commit(new_state, drop)
+    return {"changed": changed, "removed": removed, "skipped_restricted": skipped_restricted, "lightrag": flushed}

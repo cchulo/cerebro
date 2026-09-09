@@ -37,6 +37,7 @@ def sync() -> dict:
     targets = scopes.backstage_scopes()      # catalog is org-wide metadata; goes to every scope flagged backstage: true
     if not targets:
         return {"skipped": "no scope has backstage: true"}
+    batches, new_state, drop = lightrag.Batches(), {}, set()
     changed, seen = 0, set()
     for e in _entities():
         md = e["metadata"]
@@ -47,13 +48,14 @@ def sync() -> dict:
         if state.get(key) == version:
             continue
         for scope in targets:
-            lightrag.delete_by_source(scope, key)
-            lightrag.upsert_text(scope, key, text, title=f"{e['kind']} {md['name']}")
-        state.set(key, version); changed += 1
+            batches[scope].upsert(key, text, title=f"{e['kind']} {md['name']}")
+        new_state[key] = version; changed += 1
     removed = 0
     for key in state.keys_with_prefix("backstage:"):
         if key not in seen:
             for scope in targets:
-                lightrag.delete_by_source(scope, key)
-            state.delete(key); removed += 1
-    return {"changed": changed, "removed": removed}
+                batches[scope].delete(key)
+            drop.add(key); removed += 1
+    flushed = batches.flush()
+    state.commit(new_state, drop)
+    return {"changed": changed, "removed": removed, "lightrag": flushed}
