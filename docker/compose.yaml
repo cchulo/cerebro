@@ -12,12 +12,18 @@
 
 name: agent-context-stack
 
+# Every container, volume and network carries these labels; scripts/down.sh removes resources BY LABEL, so anything
+# the stack creates is found even after scopes.yaml changed. Per-scope resources add context-stack.io/scope=<name>.
+x-labels: &labels
+  context-stack.io/project: agent-context-stack
+
 services:
 
   # ------------------------------------------------------------------ shared
   postgres:
     image: docker.io/pgvector/pgvector:0.8.2-pg17
     restart: unless-stopped
+    labels: *labels
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -35,6 +41,7 @@ services:
   ollama:
     image: docker.io/ollama/ollama:0.33.3
     restart: unless-stopped
+    labels: *labels
     volumes:
       - ollama:/root/.ollama
     environment:
@@ -47,6 +54,7 @@ services:
   redis:
     image: docker.io/redis:7.4-alpine
     restart: unless-stopped
+    labels: *labels
     command: ["redis-server", "--save", "60", "1"]
     volumes:
       - redis:/data
@@ -55,6 +63,7 @@ services:
   hindsight:
     image: ghcr.io/vectorize-io/hindsight:0.9.2
     restart: unless-stopped
+    labels: *labels
     depends_on:
       postgres: { condition: service_healthy }
       ollama: { condition: service_started }
@@ -97,6 +106,7 @@ services:
   sourcebot:
     image: ghcr.io/sourcebot-dev/sourcebot:v5.1.10
     restart: unless-stopped
+    labels: *labels
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_started }
@@ -123,6 +133,7 @@ services:
   ingest:
     build: { context: .., dockerfile: ingest/Dockerfile }
     restart: unless-stopped
+    labels: *labels
     environment:
       SCOPES_FILE: /config/scopes.yaml
       LIGHTRAG_URL_TEMPLATE: http://lightrag-{scope}:9621
@@ -151,6 +162,7 @@ services:
   gateway:
     build: { context: .., dockerfile: mcp/gateway/Dockerfile }
     restart: unless-stopped
+    labels: *labels
     depends_on:
       hindsight: { condition: service_started }
       sourcebot: { condition: service_started }
@@ -175,8 +187,12 @@ services:
       - "127.0.0.1:8090:8090"   # loopback only: the SSO proxy fronts it
 
 volumes:
-  pgdata:
-  ollama:
-  redis:
-  sourcebot:
-  ingest_state:
+  pgdata:       { labels: *labels }
+  ollama:       { labels: *labels }
+  redis:        { labels: *labels }
+  sourcebot:    { labels: *labels }
+  ingest_state: { labels: *labels }
+
+networks:
+  default:
+    labels: *labels

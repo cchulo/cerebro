@@ -43,30 +43,34 @@ LIGHTRAG_ENV = {
     "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD}", "POSTGRES_DATABASE": "lightrag", "POSTGRES_VECTOR_INDEX_TYPE": "HNSW",
 }
 
+PROJECT_LABEL = {"context-stack.io/project": "agent-context-stack"}
+
+
 def compose():
     services, volumes = {}, {}
     for name, sc in scopes.items():
         ws = safe(name)
+        labels = {**PROJECT_LABEL, "context-stack.io/scope": name}
         services[f"lightrag-{name}"] = {
             "image": "ghcr.io/hkuds/lightrag:v1.5.7", "restart": "unless-stopped",
             "depends_on": {"postgres": {"condition": "service_healthy"}},
             "environment": {**LIGHTRAG_ENV, "WORKSPACE": f"scope_{ws}"},
-            "volumes": [f"lightrag_{ws}:/app/data"],
+            "volumes": [f"lightrag_{ws}:/app/data"], "labels": labels,
         }
-        volumes[f"lightrag_{ws}"] = None
+        volumes[f"lightrag_{ws}"] = {"labels": labels}
         services[f"falkordb-{name}"] = {
             "image": "docker.io/falkordb/falkordb:v4.20.4", "restart": "unless-stopped",
-            "volumes": [f"falkordb_{ws}:/var/lib/falkordb/data"],
+            "volumes": [f"falkordb_{ws}:/var/lib/falkordb/data"], "labels": labels,
             "healthcheck": {"test": ["CMD", "redis-cli", "PING"], "interval": "10s", "timeout": "5s", "retries": 10},
         }
-        volumes[f"falkordb_{ws}"] = None
+        volumes[f"falkordb_{ws}"] = {"labels": labels}
         services[f"codegraph-{name}"] = {
             "build": "../mcp/codegraph-mcp", "restart": "unless-stopped",
             "depends_on": {f"falkordb-{name}": {"condition": "service_healthy"}},
             "environment": {"DEFAULT_DATABASE": "falkordb-remote", "FALKORDB_HOST": f"falkordb-{name}", "FALKORDB_PORT": "6379"},
-            "volumes": [f"repos_{ws}:/workspace:ro", f"cgc_{ws}:/home/cgc/.codegraphcontext"],
+            "volumes": [f"repos_{ws}:/workspace:ro", f"cgc_{ws}:/home/cgc/.codegraphcontext"], "labels": labels,
         }
-        volumes[f"repos_{ws}"] = None; volumes[f"cgc_{ws}"] = None
+        volumes[f"repos_{ws}"] = {"labels": labels}; volumes[f"cgc_{ws}"] = {"labels": labels}
         services[f"indexer-{name}"] = {
             "build": "../mcp/codegraph-mcp", "profiles": ["jobs"],
             "depends_on": {f"falkordb-{name}": {"condition": "service_healthy"}},
@@ -74,12 +78,12 @@ def compose():
                             "GIT_DOC_REPOS": ",".join((sc.get("code") or {}).get("repos", [])), "GITHUB_TOKEN": "${GITHUB_TOKEN}"},
             "volumes": [f"repos_{ws}:/workspace", f"cgc_{ws}:/home/cgc/.codegraphcontext",
                         "../index/index-repo.sh:/usr/local/bin/index-repo.sh:ro"],
-            "entrypoint": ["/bin/bash", "/usr/local/bin/index-repo.sh", "all"],
+            "entrypoint": ["/bin/bash", "/usr/local/bin/index-repo.sh", "all"], "labels": labels,
         }
     ups = mcp_upstreams()
     for name, m in ups.items():
         services[f"mcp-{name}"] = {"image": m.image, "restart": "unless-stopped", "command": list(m.args),
-                                   "environment": dict(m.env)}        # no ports: only the gateway reaches it
+                                   "environment": dict(m.env), "labels": {**PROJECT_LABEL, "context-stack.io/plugin": name}}   # no ports
     if ups:
         services["gateway"] = {"depends_on": {f"mcp-{n}": {"condition": "service_started"} for n in ups}}
     out = {"services": services, "volumes": volumes}

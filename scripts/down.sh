@@ -10,7 +10,8 @@
 #   scripts/down.sh --all-targets   compose and Kubernetes
 #   scripts/down.sh --nuke          = --volumes --images --pulled --all-targets
 #
-# Nothing here touches config/ or plugins/. Generated files stay; `make gen` rewrites them anyway.
+# Selection is BY LABEL: context-stack.io/project=agent-context-stack on every container, volume and network,
+# app.kubernetes.io/part-of=context-stack on every Kubernetes object. Nothing here touches config/ or plugins/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VOLUMES=0 IMAGES=0 PULLED=0 K8S=0 COMPOSE=1
@@ -20,6 +21,8 @@ for a in "$@"; do case $a in
   --nuke) VOLUMES=1; IMAGES=1; PULLED=1; K8S=1; COMPOSE=1;;
   -h|--help) sed -n 2,13p "$0"; exit 0;; *) echo "unknown option $a" >&2; exit 2;; esac; done
 PROJECT=agent-context-stack
+LABEL="context-stack.io/project=$PROJECT"          # on every container, volume and network (docker/compose.yaml, gen-scopes.py)
+K8S_LABEL="app.kubernetes.io/part-of=context-stack"   # on every Kubernetes object incl. PVCs (k8s/kustomization.yaml)
 [ -f config/stack.env ] && export COMPOSE_ENV_FILES="$PWD/config/stack.env"
 
 if [ $COMPOSE = 1 ]; then
@@ -28,20 +31,21 @@ if [ $COMPOSE = 1 ]; then
   [ -f docker/compose.scopes.yaml ] && FILES+=(-f docker/compose.scopes.yaml)
   FILES+=(-f docker/compose.host-ollama.yaml -f docker/compose.test.yaml)
   docker compose "${FILES[@]}" --profile jobs down --remove-orphans $([ $VOLUMES = 1 ] && echo --volumes) 2>&1 | grep -vE "variable is not set" || true
-  # anything else labelled with the project (stale scopes, renamed services, one-off jobs)
-  docker ps -aq --filter "label=com.docker.compose.project=$PROJECT" | xargs -r docker rm -f >/dev/null 2>&1 || true
-  if [ $VOLUMES = 1 ]; then
-    docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT" | xargs -r docker volume rm >/dev/null 2>&1 || true
-  fi
-  docker network ls -q --filter "label=com.docker.compose.project=$PROJECT" | xargs -r docker network rm >/dev/null 2>&1 || true
+  # then BY LABEL: stale scopes, renamed services, one-off jobs, anything the current files no longer declare.
+  # The compose-project label is kept as a second net for resources created before explicit labelling existed.
+  for f in "label=$LABEL" "label=com.docker.compose.project=$PROJECT"; do
+    docker ps -aq --filter "$f" | xargs -r docker rm -f >/dev/null 2>&1 || true
+    [ $VOLUMES = 1 ] && { docker volume ls -q --filter "$f" | xargs -r docker volume rm >/dev/null 2>&1 || true; }
+    docker network ls -q --filter "$f" | xargs -r docker network rm >/dev/null 2>&1 || true
+  done
 fi
 
 if [ $K8S = 1 ] && kubectl get ns context-stack >/dev/null 2>&1; then
   echo ">> kubernetes: deleting workloads in namespace context-stack$([ $VOLUMES = 1 ] && echo ', PVCs and the namespace')"
+  kubectl -n context-stack delete deploy,statefulset,cronjob,job,svc,configmap,secret -l "$K8S_LABEL" --wait=true
   if [ $VOLUMES = 1 ]; then
+    kubectl -n context-stack delete pvc -l "$K8S_LABEL" --wait=true
     kubectl delete namespace context-stack --wait=true
-  else
-    kubectl -n context-stack delete deploy,statefulset,cronjob,job,svc,configmap,secret --all --wait=true
   fi
 fi
 
@@ -55,5 +59,5 @@ if [ $PULLED = 1 ]; then
 fi
 
 echo ">> left behind:"
-echo "   containers: $(docker ps -aq --filter "label=com.docker.compose.project=$PROJECT" | wc -l | tr -d ' ')   volumes: $(docker volume ls -q --filter "label=com.docker.compose.project=$PROJECT" | wc -l | tr -d ' ')   networks: $(docker network ls -q --filter "label=com.docker.compose.project=$PROJECT" | wc -l | tr -d ' ')   built images: $(docker images -q --filter "reference=${PROJECT}-*" | wc -l | tr -d ' ')"
+echo "   containers: $(docker ps -aq --filter "label=$LABEL" | wc -l | tr -d ' ')   volumes: $(docker volume ls -q --filter "label=$LABEL" | wc -l | tr -d ' ')   networks: $(docker network ls -q --filter "label=$LABEL" | wc -l | tr -d ' ')   built images: $(docker images -q --filter "reference=${PROJECT}-*" | wc -l | tr -d ' ')"
 kubectl get ns context-stack >/dev/null 2>&1 && echo "   kubernetes: namespace context-stack still exists ($(kubectl -n context-stack get pods --no-headers 2>/dev/null | wc -l | tr -d ' ') pods)" || echo "   kubernetes: no context-stack namespace"

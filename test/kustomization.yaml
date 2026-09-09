@@ -4,6 +4,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: context-stack
+labels:
+  - pairs: { app.kubernetes.io/part-of: context-stack }
+    includeSelectors: false
+    includeTemplates: true
 resources:
   - ../k8s
   - k8s-mocks.yaml

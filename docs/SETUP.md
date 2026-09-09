@@ -211,6 +211,12 @@ Full guide: [PLUGINS.md](PLUGINS.md); the freshness model: [SOURCES.md](SOURCES.
 
 `scripts/up.sh` and `scripts/down.sh` wrap everything above for both targets; the Makefile targets call them.
 
+Everything the stack creates is labelled: `context-stack.io/project=agent-context-stack` on every container, volume
+and network (plus `context-stack.io/scope=<name>` per scope and `context-stack.io/plugin=<name>` on generated MCP
+upstreams), `app.kubernetes.io/part-of=context-stack` on every Kubernetes object including PersistentVolumeClaims.
+`down.sh` selects by those labels, so a scope removed from `scopes.yaml` is still cleaned up, and nothing without the
+label (other projects, hand-made volumes) is ever touched.
+
 | Command | Effect |
 |---|---|
 | `scripts/up.sh` | regenerate, build images, `docker compose up`, wait for every service |
