@@ -65,7 +65,6 @@ mcp/codegraph-mcp/      CodeGraphContext image with HTTP MCP bridge (used per sc
 docs/CONNECT.md         how to connect Claude Code / Cursor
 docs/ACCESS-CONTROL.md  the scope model and its limits
 index/index-repo.sh     clone + CodeGraphContext (+ optional SCIP) index for one or all repos
-.github/workflows/      example push-triggered re-ingest / re-index
 scripts/pull-models.sh  pulls the Ollama models
 ```
 
@@ -129,10 +128,10 @@ Engine ports (8888, 3000, per-scope 9621/8045) are admin-only.
 
 | Source | Trigger | Path |
 |---|---|---|
-| Confluence | nightly cron (`INGEST_SCHEDULE_CRON`) or `POST /webhook/confluence` | version-diff per page, deletes reconciled |
-| Backstage | nightly or `POST /webhook/backstage` | entity + relations rendered as text |
-| Repo docs | push to main → `POST /webhook/git` | content-hash per file |
-| Code | push to main → `indexer-<scope> <repo>`; nightly per-scope indexer | Sourcebot syncs on its own schedule |
+| Confluence | nightly cron (`INGEST_SCHEDULE_CRON`); optionally the source calls `POST /webhook/confluence` | version-diff per page, deletes reconciled |
+| Backstage | nightly cron | entity + relations rendered as text |
+| Repo docs | nightly cron (`git` plugin clones and content-hashes) | changed files only |
+| Code | Sourcebot syncs on its own schedule; `indexer-<scope>` CronJob (nightly by default) checks upstream and skips repos whose HEAD has not moved | pull model: nothing pushes into the stack |
 
 ## Verified versions
 

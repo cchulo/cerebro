@@ -35,7 +35,8 @@ in `config/stack.env` (OrbStack pods reach the host as `host.docker.internal`), 
 ## Operate
 
 ```sh
-kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public-now   # code graph, per scope
+kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public-now   # first index; the CronJob then
+                                                                                       # checks upstream and skips unchanged repos
 kubectl -n context-stack port-forward svc/ingest 8080:8080 &  && make sync              # docs -> LightRAG
 kubectl -n context-stack port-forward svc/gateway 8090:8090 & && make smoke             # ACL checks
 kubectl -n context-stack port-forward svc/sourcebot 3000:3000                           # create the API key once

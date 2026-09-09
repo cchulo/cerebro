@@ -160,9 +160,10 @@ Then, in this order:
 No Confluence or Backstage to test with yet? `make test-env` adds mock services that serve `test/fixtures` and
 mounts `test/docs`; the shipped `scopes.yaml` already targets them, so steps 2–4 work unchanged.
 
-Keeping it fresh: the ingest runs on `INGEST_SCHEDULE_CRON` and accepts `POST /webhook/<adapter>` with a filter
-(`{"space": "ENG"}`, `{"repo": "https://..."}`); the indexer jobs run nightly on Kubernetes or from CI on push
-(`.github/workflows/index-on-push.yml`); Sourcebot syncs on its own schedule.
+Keeping it fresh is a pull model: the ingest runs on `INGEST_SCHEDULE_CRON` (incremental, so hourly is cheap), the
+indexer jobs run on their CronJob schedule and skip repositories whose upstream HEAD has not moved, and Sourcebot
+syncs on its own schedule. Nothing outside the stack needs to know where it runs; `POST /webhook/<adapter>` exists
+only for sources that can call in (Confluence Cloud, JAMA events) and is optional.
 
 ## 6. Kubernetes (k3s, OrbStack, any cluster)
 

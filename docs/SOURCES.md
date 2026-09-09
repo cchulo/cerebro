@@ -94,8 +94,8 @@ solely by the ingest, on three triggers:
 
 | Trigger | Latency to a fresh answer | Notes |
 |---|---|---|
-| Webhook from the source (`POST /webhook/<adapter>` with a filter) | minutes, dominated by LightRAG's extraction | Confluence Cloud, GitHub/GitLab push, JAMA events can all call it; `INGEST_WEBHOOK_SECRET` guards it |
-| Schedule (`INGEST_SCHEDULE_CRON`, nightly by default) | up to one interval | tighten it for sources without webhooks |
+| Schedule (`INGEST_SCHEDULE_CRON`, nightly by default) | up to one interval | the primary path: the stack pulls, nothing has to know where the stack is; every run is incremental, so an hourly schedule is cheap |
+| Webhook from the source (`POST /webhook/<adapter>` with a filter), optional | minutes, dominated by LightRAG's extraction | only if a source can call the stack (Confluence Cloud, JAMA events); `INGEST_WEBHOOK_SECRET` guards it |
 | Manual (`make sync`, `POST /sync/<adapter>` or `/sync/all`) | immediate | after config changes or re-scoping |
 
 Every run is incremental: adapters yield `(key, version)` per document, the engine re-ingests only changed keys,
