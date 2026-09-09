@@ -85,7 +85,8 @@ make gen                           # writes docker/compose.scopes.yaml and k8s/g
 make up EXTRA="-f docker/compose.host-ollama.yaml"   # or plain `make up` to run Ollama in the project (then `make models`)
 make index                         # first code-graph index, one indexer job per scope
 make sync                          # Confluence / Backstage / repo docs -> LightRAG
-make smoke                         # access-control checks against the gateway
+make smoke                         # access-control checks against the gateway (shows stack activity in green while it runs)
+make status ARGS=--watch           # is it working / is it progressing (documents processed per scope, code graph, health)
 make down / make nuke              # stop (keep data) / remove containers, volumes and the k8s namespace
 ```
 

@@ -242,6 +242,11 @@ that finishes, and nothing prints while it runs. Use these to see progress:
 | `docker compose ... logs -f ingest` (what was listed and handed over) | `kubectl -n context-stack logs -f deploy/ingest` |
 | `docker compose ... ps` | `kubectl -n context-stack get pods -w` |
 
+`make smoke` narrates itself: every call is printed before it runs (white/dim) with its elapsed time after, results are
+white or red, and while it runs the stack's own log activity (gateway requests, LightRAG queries and extraction,
+mcp-confluence calls, Hindsight) streams in green, auto-detected from Compose or Kubernetes (`--activity`,
+`--no-color`). A long pause with green lines is the model working; a long pause without any is worth a look.
+
 `status` shows, per scope, `processed/total` documents with the pipeline's latest message, which repositories the
 code graph has indexed, the last sync line and the health of memory and search. "processed" counts documents whose
 extraction is finished; `query_docs` answers only from those. A `failed` count means the model endpoint was

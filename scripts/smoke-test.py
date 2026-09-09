@@ -9,10 +9,76 @@ user cannot query the payments docs scope, cannot search payments repos, cannot 
 reach a non-allowlisted code-graph tool. --live additionally runs one real query per engine.
 Only the gateway is needed for the ACL checks; engines may be down.
 """
-import argparse, asyncio, json, sys, pathlib
+import argparse, asyncio, json, os, re, subprocess, sys, threading, time, pathlib
 import yaml
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+
+# ---------------------------------------------------------------- output: white = this test, green = the stack, red = failures
+COLOR = (sys.stdout.isatty() or os.environ.get("FORCE_COLOR") is not None) and os.environ.get("NO_COLOR") is None
+def paint(code, text): return f"\033[{code}m{text}\033[0m" if COLOR else text
+WHITE, GREEN, RED, DIM = "1;37", "32", "1;31", "2"
+_lock = threading.Lock()
+def say(text, color=WHITE):
+    with _lock:
+        print(paint(color, text), flush=True)
+
+class Activity:
+    """Tails the stack's logs while the test runs and prints the interesting lines in green."""
+    PATTERN = re.compile(r"CallToolRequest|POST /|query|Query|Processing|extract|Extract|Merging|embedding|recall|retain|"
+                         r"consolidat|confluence_search|confluence_get_page|search_code|Error|error|Traceback", re.I)
+    NOISE = re.compile(r"WORKER_STATS|pipeline_status|/health|status_counts|Terminating session|GET /api/version", re.I)
+    def __init__(self, mode):
+        self.mode, self.proc, self.thread = mode, None, None
+    def start(self):
+        root = pathlib.Path(__file__).resolve().parent.parent
+        if self.mode == "compose":
+            files = ["-f", "docker/compose.yaml", "-f", "docker/compose.scopes.yaml", "-f", "docker/compose.host-ollama.yaml", "-f", "docker/compose.test.yaml"]
+            env = {**os.environ, "COMPOSE_ENV_FILES": str(root / "config/stack.env")}
+            cmd = ["docker", "compose", *files, "logs", "-f", "--since", "1s", "--no-color", "gateway", "hindsight", "mcp-confluence",
+                   "sourcebot"] + [f"lightrag-{s}" for s in CFG["scopes"]]
+        elif self.mode == "k8s":
+            env = os.environ
+            cmd = ["kubectl", "-n", "context-stack", "logs", "-f", "--since=1s", "--prefix", "--max-log-requests=20",
+                   "-l", "app.kubernetes.io/part-of=context-stack"]
+        else:
+            return
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env, cwd=root)
+        self.thread = threading.Thread(target=self._pump, daemon=True); self.thread.start()
+    def _pump(self):
+        for line in self.proc.stdout:
+            line = line.rstrip()
+            if not self.PATTERN.search(line) or self.NOISE.search(line):
+                continue
+            if self.mode == "compose" and "|" in line:
+                svc, _, rest = line.partition("|"); svc = svc.strip().replace("agent-context-stack-", "").rsplit("-1", 1)[0]
+            elif self.mode == "k8s" and "]" in line:
+                svc, _, rest = line.partition("]"); svc = svc.strip("[ ").split("/")[-1].rsplit("-", 2)[0]
+            else:
+                svc, rest = "stack", line
+            rest = re.sub(r"^\s*(INFO|WARNING|ERROR)[:\s-]*", "", rest.strip())
+            say(f"    {svc:<18} {rest[:150]}", GREEN)
+    def stop(self):
+        if self.proc:
+            self.proc.terminate()
+
+def detect_activity(url):
+    if os.environ.get("SMOKE_ACTIVITY"):
+        return os.environ["SMOKE_ACTIVITY"]
+    root = pathlib.Path(__file__).resolve().parent.parent
+    try:
+        out = subprocess.run(["docker", "compose", "-f", "docker/compose.yaml", "ps", "-q", "gateway"], capture_output=True, text=True, cwd=root,
+                             env={**os.environ, "COMPOSE_ENV_FILES": str(root / "config/stack.env")}, timeout=15).stdout.strip()
+        if out:
+            return "compose"
+    except Exception:
+        pass
+    try:
+        if subprocess.run(["kubectl", "-n", "context-stack", "get", "deploy/gateway"], capture_output=True, timeout=15).returncode == 0:
+            return "k8s"
+    except Exception:
+        pass
+    return "none"
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CFG = yaml.safe_load(open(ROOT / "config/scopes.yaml"))
@@ -22,12 +88,15 @@ PUBLIC = "public"; PRIVATE = "payments"; PRIVATE_GROUP = "payments-team"
 
 failures = []
 def check(cond, msg):
-    print(("  ok   " if cond else "  FAIL ") + msg)
+    say(("  ok   " if cond else "  FAIL ") + msg, WHITE if cond else RED)
     if not cond:
         failures.append(msg)
 
 async def call(url, user, groups, tool, args):
     headers = {USER_HDR: user, GROUPS_HDR: ",".join(groups)}
+    shown = {k: (v if len(str(v)) < 60 else str(v)[:57] + "...") for k, v in args.items()}
+    say(f"  \u25b6 {user}{'(' + ','.join(groups) + ')' if groups else ''} -> {tool} {json.dumps(shown)}", DIM)
+    t0 = time.monotonic()
     async with streamablehttp_client(url, headers=headers, timeout=600, sse_read_timeout=600) as (r, w, _):
         async with ClientSession(r, w) as s:
             await s.initialize()
@@ -37,24 +106,25 @@ async def call(url, user, groups, tool, args):
             if not res.isError:
                 try: data = json.loads(text)
                 except ValueError: data = text
+            say(f"    \u21b3 {'error' if res.isError else 'ok'} in {time.monotonic() - t0:.1f}s", DIM)
             return res.isError, data, text
 
 async def main(url, live):
     private_repos = CFG["scopes"][PRIVATE]["code"]["repos"]
 
-    print("no-group user (alice)")
+    say("no-group user (alice)")
     err, a, _ = await call(url, "alice", [], "list_scopes", {})
     check(not err and a["scopes"] == [PUBLIC], f"alice sees only '{PUBLIC}': {a and a.get('scopes')}")
     check(not err and a["banks"] == ["user-alice"], f"alice's banks are just her own: {a and a.get('banks')}")
     check(not err and not set(a["repos"]) & set(private_repos), "alice's repo list has no payments repos")
 
-    print(f"{PRIVATE_GROUP} user (bob)")
+    say(f"{PRIVATE_GROUP} user (bob)")
     err, b, _ = await call(url, "bob", [PRIVATE_GROUP], "list_scopes", {})
     check(not err and set(b["scopes"]) >= {PUBLIC, PRIVATE}, f"bob sees {PUBLIC}+{PRIVATE}: {b and b.get('scopes')}")
     check(not err and f"team-{PRIVATE_GROUP}" in b["banks"], f"bob has the team bank: {b and b.get('banks')}")
     check(not err and set(private_repos) <= set(b["repos"]), "bob's repo list includes the payments repos")
 
-    print("negative checks for alice")
+    say("negative checks for alice")
     err, _, t = await call(url, "alice", [], "query_docs", {"query": "x", "scopes": [PRIVATE]})
     check(err and "not allowed" in t, f"query_docs scope={PRIVATE} refused: {t[:80]}")
     err, _, t = await call(url, "alice", [], "recall", {"query": "x", "bank": f"team-{PRIVATE_GROUP}"})
@@ -68,7 +138,7 @@ async def main(url, live):
 
     err, d, t = await call(url, "alice", [], "search_code", {"query": "TODO", "max_results": 5})
     if err:
-        print(f"  skip search_code (engine down?): {t[:100]}")
+        say(f"  skip search_code (engine down?): {t[:100]}", DIM)
     else:
         names = {u.split("/", 3)[-1].removesuffix(".git").lower() for u in private_repos}
         leaked = [f["repository"] for f in d["files"] if any(f["repository"].lower().endswith(n) for n in names)]
@@ -76,7 +146,7 @@ async def main(url, live):
         check(PRIVATE not in d["query"].split("payments.git")[0] or True, "repo filter present")
 
     if live:
-        print("live queries (engines must be up and indexed; markers come from test/fixtures)")
+        say("live queries (engines must be up and indexed; markers come from test/fixtures)")
         err, d, t = await call(url, "alice", [], "query_docs", {"query": "What is documented here?", "mode": "naive"})
         check(not err and all("error" not in r for r in d["results"]), f"query_docs public: {t[:120]}")
 
@@ -99,7 +169,7 @@ async def main(url, live):
         # live sources (system of record through the gateway, same scopes): PAY page 3001 has ZEPHYR-7731, 3002 is restricted
         err, d, t = await call(url, "alice", [], "live_search", {"source": "confluence", "query": "settlement"})
         if err and "not enabled" in t:
-            print(f"  skip live_search: {t[:80]}")
+            say(f"  skip live_search: {t[:80]}", DIM)
         else:
             check(not err and all(r["space"] != "PAY" for r in d["results"]), f"alice live_search never returns PAY ({[r['space'] for r in d['results']] if not err else t[:80]})")
             err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "live_search", {"source": "confluence", "query": "settlement"})
@@ -120,7 +190,7 @@ async def main(url, live):
         # code search isolation: jinja is in the payments scope
         err, d, t = await call(url, "alice", [], "search_code", {"query": "class Environment lang:python", "max_results": 10})
         if err:
-            print(f"  skip live search_code: {t[:100]}")
+            say(f"  skip live search_code: {t[:100]}", DIM)
         else:
             check(all("pallets/jinja" not in f["repository"] for f in d["files"]), "alice's search never returns jinja")
             err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "search_code", {"query": "class Environment lang:python", "max_results": 10})
@@ -132,12 +202,27 @@ async def main(url, live):
         err, d, t = await call(url, "alice", [], "code_graph", {"scope": PUBLIC, "tool": "list_indexed_repositories", "arguments": {}})
         check(not err, f"code_graph list_indexed_repositories: {t[:120]}")
 
-    print("\n" + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED"))
+    say("\n" + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED"), WHITE if not failures else RED)
     return 0 if not failures else 1
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8090/mcp")
     ap.add_argument("--live", action="store_true")
+    ap.add_argument("--activity", choices=["auto", "compose", "k8s", "none"], default="auto",
+                    help="stream the stack's own log activity (green) while the test runs")
+    ap.add_argument("--no-color", action="store_true")
+    ap.add_argument("--color", action="store_true", help="force colors even when piped (or FORCE_COLOR=1)")
     a = ap.parse_args()
-    sys.exit(asyncio.run(main(a.url, a.live)))
+    if a.color:
+        COLOR = True
+    if a.no_color:
+        COLOR = False
+    mode = detect_activity(a.url) if a.activity == "auto" else a.activity
+    say(f"smoke test against {a.url}  (white: this test, green: stack activity from {mode})", DIM)
+    act = Activity(mode); act.start()
+    try:
+        rc = asyncio.run(main(a.url, a.live))
+    finally:
+        act.stop()
+    sys.exit(rc)
