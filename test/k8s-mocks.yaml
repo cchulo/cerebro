@@ -43,3 +43,27 @@ spec:
           ports: [{ containerPort: 8000 }]
           volumeMounts: [{ name: fixtures, mountPath: /fixtures, readOnly: true }]
       volumes: [{ name: fixtures, configMap: { name: mock-fixtures } }]
+---
+# upstream MCP server shaped like mcp-atlassian, for `live: { confluence: { via: mcp, url: http://mock-confluence-mcp:8000/mcp } }`
+apiVersion: v1
+kind: Service
+metadata: { name: mock-confluence-mcp }
+spec: { selector: { app: mock-confluence-mcp }, ports: [{ port: 8000, targetPort: 8000 }] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mock-confluence-mcp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mock-confluence-mcp } }
+  template:
+    metadata: { labels: { app: mock-confluence-mcp } }
+    spec:
+      containers:
+        - name: mock
+          image: agent-context-stack-mock-confluence:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "mcp_app.py"]
+          ports: [{ containerPort: 8000 }]
+          volumeMounts: [{ name: fixtures, mountPath: /fixtures, readOnly: true }]
+      volumes: [{ name: fixtures, configMap: { name: mock-fixtures } }]

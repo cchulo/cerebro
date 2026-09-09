@@ -96,6 +96,7 @@ flowchart LR
     GW -->|"scopes of caller"| CG
     GW -->|"repo filter"| SB
     GW -->|"caller's banks"| HS
+    GW -.->|"live fallback on index miss<br/>same scopes · REST or upstream MCP"| CONF
 
     CONF & BS --> ING
     GIT --> ING
@@ -129,7 +130,9 @@ flowchart LR
 - **Amber** is shared but partitioned by bank: `user-<id>` private, `team-<group>` shared with that IdP group.
 - **Red** is the one outbound dependency. Only LightRAG and Hindsight send text there; Sourcebot and
   CodeGraphContext use no model. Point it at local Ollama or at an endpoint your organisation controls.
-- **Dashed** boxes are read-only sources; nothing is ever written back to them.
+- **Dashed** boxes are read-only sources; nothing is ever written back to them. The dashed edge from the gateway is
+  the live fallback: when a scope's index has no answer, the gateway queries the system of record for that scope's
+  spaces (directly or through an upstream MCP server) and returns refs to fetch. Plugins under `plugins/live/`.
 - **Naming**: CodeGraphContext is the product (`cgc`). `codegraph-<scope>` is our container/Service running it,
   `mcp/codegraph-mcp/` its image, and `code_graph` the gateway tool that proxies it. One thing, three handles.
 
@@ -166,6 +169,7 @@ sequenceDiagram
     participant S as Sourcebot
     participant C as CodeGraphContext (scope)
     participant M as Inference backend
+    participant R as System of record (Confluence)
 
     A->>P: MCP over HTTPS (session cookie / token)
     P->>G: + X-Forwarded-User, X-Forwarded-Groups
@@ -181,7 +185,17 @@ sequenceDiagram
     G->>L: POST /query — only the caller's scopes
     L->>M: retrieve + answer
     L-->>G: answer + references
-    G-->>A: answer with source ids
+    alt index had an answer
+        G-->>A: answer with source ids
+    else index miss (no context)
+        G->>R: live search, CQL confined to the caller's spaces (REST or upstream MCP)
+        R-->>G: hits (space re-checked, restricted pages dropped)
+        G-->>A: fallback refs
+        A->>G: live_fetch(ref)
+        G->>R: read page, verify space + restriction
+        R-->>G: text
+        G-->>A: page text
+    end
 
     A->>G: search_code / code_graph
     G->>S: query + repo:^…$ filter for the caller's repos

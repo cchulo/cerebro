@@ -9,7 +9,7 @@ Self-hosted context stack for AI agents:
 | Documents | [LightRAG](https://github.com/HKUDS/LightRAG), **one instance per scope** | What the docs say: Confluence, Backstage, repo docs, ADRs |
 | Code search | [Sourcebot](https://github.com/sourcebot-dev/sourcebot) | Exact / symbol search across remote repos, repo-filtered per user |
 | Code graph | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) + FalkorDB, **one pair per scope** | Call graph, blast radius (runs as `codegraph-<scope>`, exposed as the `code_graph` tool) |
-| Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through adapters (Confluence, Backstage, git docs, files built in; drop-in plugins for the rest) |
+| Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through plugins (`plugins/sources/`: Confluence, Backstage, git docs, files shipped; add your own the same way) |
 | Shared | Postgres + pgvector, Ollama, Redis | One DB, one local model endpoint |
 
 **Access control is built in**: `config/scopes.yaml` maps IdP groups → scopes → code repos + document sources. Each scope

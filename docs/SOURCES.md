@@ -72,7 +72,7 @@ Three places, each with one job, so a new source never touches the ingest code o
 
 The `docs:` map is the access-control decision: listing a source under a scope says "everything this adapter yields
 for this config may be read by everyone in the scope's groups". The adapter must honour that by skipping anything
-with a finer ACL (Confluence page restrictions are the built-in example).
+with a finer ACL (Confluence page restrictions are the shipped example).
 
 ## Developing an adapter
 

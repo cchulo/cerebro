@@ -57,7 +57,7 @@ The single environment file for the whole stack. Compose reads it for variable i
 | Hindsight | `HINDSIGHT_API_KEY`, `HINDSIGHT_CP_ACCESS_KEY`, `HINDSIGHT_RERANKER` | API key every call must carry (only the gateway has it); UI login key; `local` reranker (one-time model download) or `rrf` (none) |
 | LightRAG | `LIGHTRAG_API_KEY` | shared by all scope instances; only ingest and gateway hold it |
 | Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` | generate the two secrets with `openssl rand -base64 33` / `24`; the API key is created in Sourcebot's UI after first start |
-| Ingest | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the built-in adapters; leave a block empty and that adapter reports "not configured" |
+| Ingest | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the shipped adapters; leave a block empty and that adapter reports "not configured" |
 
 Generate real secrets before the first start; every `change-me` value is a placeholder.
 
