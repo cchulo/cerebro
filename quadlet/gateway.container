@@ -10,7 +10,7 @@ ContainerName=gateway
 Network=stack.network
 PublishPort=127.0.0.1:8090:8090
 Volume=%h/agent-context-stack/config/scopes.yaml:/config/scopes.yaml:ro,Z
-EnvironmentFile=%h/agent-context-stack/.env
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
 Environment=SCOPES_FILE=/config/scopes.yaml HINDSIGHT_URL=http://hindsight:8888 SOURCEBOT_URL=http://sourcebot:3000 PORT=8090
 
 [Service]

@@ -4,19 +4,19 @@ Requires=postgres.service redis.service
 After=postgres.service redis.service
 
 [Container]
-Image=ghcr.io/sourcebot-dev/sourcebot:latest
+Image=ghcr.io/sourcebot-dev/sourcebot:v5.1.10
 ContainerName=sourcebot
 Network=stack.network
-User=sourcebot
-PublishPort=3000:3000
-Volume=%h/agent-context-stack/config/sourcebot/config.json:/data/config.json:ro,Z
+PublishPort=127.0.0.1:3000:3000
+Volume=%h/agent-context-stack/config/sourcebot/config.json:/config/config.json:ro,Z
 Volume=sourcebot.volume:/data
-EnvironmentFile=%h/agent-context-stack/.env
-Environment=CONFIG_PATH=/data/config.json
-Environment=AUTH_URL=${SOURCEBOT_AUTH_URL}
-Environment=AUTH_SECRET=${SOURCEBOT_AUTH_SECRET}
-Environment=DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/sourcebot
+# stack.env (generated from .env) carries DATABASE_URL, AUTH_URL, AUTH_SECRET, SOURCEBOT_ENCRYPTION_KEY, GITHUB_TOKEN
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
+Environment=CONFIG_PATH=/config/config.json
+Environment=DATA_CACHE_DIR=/data
 Environment=REDIS_URL=redis://redis:6379
+Environment=SOURCEBOT_TELEMETRY_DISABLED=true
+Environment=SOURCEBOT_LIGHTHOUSE_URL=http://127.0.0.1:9
 
 [Service]
 Restart=always

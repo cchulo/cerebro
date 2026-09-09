@@ -2,7 +2,7 @@
 Description=Shared PostgreSQL (pgvector) for Hindsight, LightRAG, Sourcebot
 
 [Container]
-Image=docker.io/pgvector/pgvector:pg17
+Image=docker.io/pgvector/pgvector:0.8.2-pg17
 ContainerName=postgres
 Network=stack.network
 Volume=pgdata.volume:/var/lib/postgresql/data

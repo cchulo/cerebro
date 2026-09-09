@@ -9,7 +9,7 @@ ContainerName=codegraph-payments
 Network=stack.network
 Volume=stack-repos-payments:/workspace:ro
 Volume=stack-cgc-payments:/home/cgc/.codegraphcontext
-Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-payments FALKORDB_PORT=6379
+Environment=DEFAULT_DATABASE=falkordb-remote FALKORDB_HOST=falkordb-payments FALKORDB_PORT=6379
 
 [Service]
 Restart=always

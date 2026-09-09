@@ -2,7 +2,7 @@
 Description=FalkorDB for scope infra
 
 [Container]
-Image=docker.io/falkordb/falkordb:latest
+Image=docker.io/falkordb/falkordb:v4.20.4
 ContainerName=falkordb-infra
 Network=stack.network
 Volume=stack-falkordb-infra:/var/lib/falkordb/data

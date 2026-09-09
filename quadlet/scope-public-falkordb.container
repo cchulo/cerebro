@@ -2,7 +2,7 @@
 Description=FalkorDB for scope public
 
 [Container]
-Image=docker.io/falkordb/falkordb:latest
+Image=docker.io/falkordb/falkordb:v4.20.4
 ContainerName=falkordb-public
 Network=stack.network
 Volume=stack-falkordb-public:/var/lib/falkordb/data

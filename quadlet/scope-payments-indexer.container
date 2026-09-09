@@ -10,8 +10,8 @@ Network=stack.network
 Volume=stack-repos-payments:/workspace
 Volume=stack-cgc-payments:/home/cgc/.codegraphcontext
 Volume=%h/agent-context-stack/index/index-repo.sh:/usr/local/bin/index-repo.sh:ro,Z
-EnvironmentFile=%h/agent-context-stack/.env
-Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-payments FALKORDB_PORT=6379
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
+Environment=DEFAULT_DATABASE=falkordb-remote FALKORDB_HOST=falkordb-payments FALKORDB_PORT=6379
 Environment=GIT_DOC_REPOS=https://github.com/your-org/payments.git,https://github.com/your-org/ledger.git
 Entrypoint=/bin/bash
 Exec=/usr/local/bin/index-repo.sh all

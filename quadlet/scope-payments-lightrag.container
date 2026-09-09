@@ -4,20 +4,19 @@ Requires=postgres.service ollama.service
 After=postgres.service ollama.service
 
 [Container]
-Image=ghcr.io/hkuds/lightrag:latest
+Image=ghcr.io/hkuds/lightrag:v1.5.7
 ContainerName=lightrag-payments
 Network=stack.network
 Volume=stack-lightrag-payments:/app/data
-EnvironmentFile=%h/agent-context-stack/.env
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
 Environment=HOST=0.0.0.0
 Environment=PORT=9621
 Environment=WORKING_DIR=/app/data/rag_storage
 Environment=INPUT_DIR=/app/data/inputs
-Environment=LLM_BINDING=ollama
-Environment=LLM_BINDING_HOST=http://ollama:11434
 Environment=OLLAMA_LLM_NUM_CTX=32768
-Environment=EMBEDDING_BINDING=ollama
-Environment=EMBEDDING_BINDING_HOST=http://ollama:11434
+Environment=LLM_TIMEOUT=600
+Environment=MAX_PARALLEL_INSERT=2
+Environment=WHITELIST_PATHS=/health
 Environment=LIGHTRAG_KV_STORAGE=PGKVStorage
 Environment=LIGHTRAG_DOC_STATUS_STORAGE=PGDocStatusStorage
 Environment=LIGHTRAG_VECTOR_STORAGE=PGVectorStorage
@@ -27,8 +26,6 @@ Environment=POSTGRES_PORT=5432
 Environment=POSTGRES_DATABASE=lightrag
 Environment=POSTGRES_VECTOR_INDEX_TYPE=HNSW
 Environment=WORKSPACE=scope_payments
-Environment=LLM_MODEL=${LLM_MODEL} EMBEDDING_MODEL=${EMBED_MODEL} EMBEDDING_DIM=${EMBED_DIM}
-Environment=POSTGRES_USER=${POSTGRES_USER} POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 
 [Service]
 Restart=always

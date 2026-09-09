@@ -2,7 +2,7 @@
 Description=Ollama local inference
 
 [Container]
-Image=docker.io/ollama/ollama:latest
+Image=docker.io/ollama/ollama:0.33.3
 ContainerName=ollama
 Network=stack.network
 Volume=ollama.volume:/root/.ollama

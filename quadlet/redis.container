@@ -2,7 +2,7 @@
 Description=Redis for Sourcebot
 
 [Container]
-Image=docker.io/redis:7-alpine
+Image=docker.io/redis:7.4-alpine
 ContainerName=redis
 Network=stack.network
 Volume=redis.volume:/data

@@ -2,7 +2,7 @@
 Description=FalkorDB for scope payments
 
 [Container]
-Image=docker.io/falkordb/falkordb:latest
+Image=docker.io/falkordb/falkordb:v4.20.4
 ContainerName=falkordb-payments
 Network=stack.network
 Volume=stack-falkordb-payments:/var/lib/falkordb/data
