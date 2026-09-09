@@ -21,7 +21,7 @@ spec:
           image: docker.io/ollama/ollama:0.33.3
           env:
             - { name: OLLAMA_KEEP_ALIVE, value: 30m }
-            - { name: OLLAMA_NUM_PARALLEL, value: "2" }
+            - { name: OLLAMA_NUM_PARALLEL, value: "4" }
           ports: [{ containerPort: 11434 }]
           volumeMounts: [{ name: models, mountPath: /root/.ollama }]
           # NVIDIA: add  resources: { limits: { nvidia.com/gpu: 1 } }  (needs the NVIDIA device plugin on the node)

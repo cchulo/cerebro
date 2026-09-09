@@ -46,7 +46,7 @@ services:
       - ollama:/root/.ollama
     environment:
       OLLAMA_KEEP_ALIVE: 30m
-      OLLAMA_NUM_PARALLEL: 2
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-4}   # requests served concurrently; queries must not queue behind ingest
     # CPU-only by default; see compose.gpu.yaml for NVIDIA.
     ports:
       - "127.0.0.1:11434:11434"

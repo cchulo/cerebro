@@ -238,7 +238,34 @@ label (other projects, hand-made volumes) is ever touched.
 | new scope | add it to `scopes.yaml`, `make gen`, deploy, `make index`, `make sync` — it costs one LightRAG + one FalkorDB/CodeGraphContext pair |
 | removed scope | on Kubernetes also `kubectl -n context-stack delete all,pvc -l scope=<name>` |
 
-## 10. Troubleshooting
+## 10. Performance: what the model endpoint has to do
+
+Nothing in the stack is slow by itself; the cost is LLM calls, and every LightRAG instance and Hindsight share the
+one endpoint in `stack.env`. Measured on an M-series laptop with `qwen3.6:35b-mlx`: 79 tokens/s generation,
+534 tokens/s prompt, so one extraction call is seconds. What makes minutes:
+
+| Work | LLM calls | Notes |
+|---|---|---|
+| Ingesting one document | 1 extraction per ~1200-char chunk (+1 more per chunk with gleaning), plus merge summaries for busy entities | a 5-page runbook ≈ 5–10 calls; 115 doc pages ≈ hours on one local model |
+| `query_docs` (mix/hybrid/local/global) | 1 keyword extraction + 1 answer | ~10–20 s on an idle endpoint; `naive` skips the keyword step |
+| `retain` | 1 extraction (async, the agent does not wait) + periodic consolidation | |
+| `search_code`, `code_graph`, `live_search` | 0 | |
+
+Queueing is the real enemy: a query waits behind every in-flight extraction call. The knobs, all in `stack.env`:
+
+- `OLLAMA_NUM_PARALLEL` (in-stack Ollama; for a host Ollama set it in its environment): requests served concurrently.
+- `LIGHTRAG_MAX_ASYNC` (concurrent LLM calls per instance, default 2 here) and `LIGHTRAG_MAX_PARALLEL_INSERT`
+  (documents processed at once, default 1): with N scopes ingesting, total in-flight calls = N × MAX_ASYNC.
+- `LIGHTRAG_MAX_GLEANING=0` (default here): one extraction pass per chunk instead of two.
+- The size of what you ingest: `git` globs, Confluence spaces, Jama projects. The example config indexes only
+  READMEs from the public repos for this reason; widen it once the endpoint has capacity.
+- An org endpoint with real throughput (`LLM_PROVIDER=openai`) removes the constraint entirely: extraction and
+  queries no longer compete for one laptop GPU.
+
+Schedule ingest when nobody is querying (the crons default to 02:00/03:00), and expect the first sync of a large
+space to take hours on a single local model regardless of settings.
+
+## 11. Troubleshooting
 
 - `gateway` refuses every call with "missing X-Forwarded-User": the request did not come through the proxy (or the
   smoke test URL is wrong). This is by design.

@@ -36,7 +36,10 @@ LIGHTRAG_ENV = {
     "EMBEDDING_BINDING": "${EMBED_PROVIDER:-ollama}", "EMBEDDING_BINDING_HOST": "${EMBED_BASE_URL:-http://ollama:11434}",
     "EMBEDDING_BINDING_API_KEY": "${EMBED_API_KEY:-ollama}",
     "EMBEDDING_MODEL": "${EMBED_MODEL}", "EMBEDDING_DIM": "${EMBED_DIM}",
-    "LLM_TIMEOUT": "600", "MAX_PARALLEL_INSERT": "2", "WHITELIST_PATHS": "/health",
+    # concurrency is capped per instance so N scopes ingesting cannot starve queries on a shared model endpoint
+    "LLM_TIMEOUT": "600", "MAX_ASYNC": "${LIGHTRAG_MAX_ASYNC:-2}", "MAX_PARALLEL_INSERT": "${LIGHTRAG_MAX_PARALLEL_INSERT:-1}",
+    "MAX_GLEANING": "${LIGHTRAG_MAX_GLEANING:-0}",    # 0 = one extraction pass per chunk (halves LLM calls); 1 = LightRAG default
+    "WHITELIST_PATHS": "/health",
     "LIGHTRAG_KV_STORAGE": "PGKVStorage", "LIGHTRAG_DOC_STATUS_STORAGE": "PGDocStatusStorage",
     "LIGHTRAG_VECTOR_STORAGE": "PGVectorStorage", "LIGHTRAG_GRAPH_STORAGE": "PGTableGraphStorage",
     "POSTGRES_HOST": "postgres", "POSTGRES_PORT": "5432", "POSTGRES_USER": "${POSTGRES_USER}",

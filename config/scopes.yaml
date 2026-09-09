@@ -36,7 +36,7 @@ scopes:
     docs:                              # adapter name -> what of that source belongs to this scope
       confluence: { spaces: [ENG, DOCS] }
       backstage: {}                    # whole catalog (org-wide metadata)
-      git: { globs: [README.md, "docs/**/*.md", "docs/**/*.rst"] }
+      git: { globs: [README.md] }      # widen (e.g. "docs/**/*.md") once the model endpoint has capacity: every page costs LLM extraction
       files: { paths: [/data/docs/public] }
 
   payments:
