@@ -58,7 +58,7 @@ echo ">> docker compose up"
 dc up -d --remove-orphans
 echo ">> waiting for services"
 for i in $(seq 1 60); do
-  notup=$(dc ps --format '{{.Service}} {{.Status}}' | grep -vE ' Up' | wc -l | tr -d ' ')
+  notup=$(dc ps --format '{{.Service}} {{.Status}}' | { grep -vE ' Up' || true; } | wc -l | tr -d ' ')   # grep exits 1 when all are up
   [ "$notup" = 0 ] && break; sleep 5
 done
 dc ps --format 'table {{.Service}}\t{{.Status}}'
