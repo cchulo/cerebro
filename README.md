@@ -55,6 +55,7 @@ plugins/                one file per source: ingest part + live fallback + MCP u
 sdk/                    stack_plugins, the framework plugin files use
 config/proxy/           example SSO reverse-proxy config
 scripts/gen-scopes.py   regenerates docker/compose.scopes.yaml and k8s/generated/ from config/
+scripts/up.sh, down.sh  lifecycle for compose and Kubernetes (flags in the file headers; make up/down/nuke)
 k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)
 config/postgres/        creates hindsight / lightrag / sourcebot DBs + pgvector
 config/sourcebot/       which repos Sourcebot indexes
