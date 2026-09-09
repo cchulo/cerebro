@@ -5,7 +5,7 @@ COMPOSE ?= docker compose -f compose.yaml -f compose.scopes.yaml $(EXTRA)
 PYTHON  ?= python3
 SCOPES  ?= $(shell $(PYTHON) -c "import yaml;print(' '.join(yaml.safe_load(open('config/scopes.yaml'))['scopes']))")
 
-.PHONY: gen up down build models index sync smoke logs ps test-env k8s-apply k8s-status diagrams
+.PHONY: gen up down build models index sync smoke logs ps test-env k8s-apply k8s-status
 gen:     ; $(PYTHON) scripts/gen-scopes.py compose > compose.scopes.yaml && $(PYTHON) scripts/gen-scopes.py k8s
 build:   ; $(COMPOSE) build
 up:      ; $(COMPOSE) up -d
@@ -21,5 +21,3 @@ test-env: ; $(COMPOSE) -f compose.test.yaml up -d --build
 # Kubernetes (k3s / OrbStack): same images, same service names. See k8s/README.md
 k8s-apply:  ; kubectl apply -k k8s
 k8s-status: ; kubectl -n context-stack get pods,pvc
-# re-render docs/img/*.svg from the mermaid blocks in docs/ARCHITECTURE.md (needs: npm i -g @mermaid-js/mermaid-cli)
-diagrams: ; $(PYTHON) scripts/render-diagrams.py

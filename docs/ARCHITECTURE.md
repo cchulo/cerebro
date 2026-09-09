@@ -3,16 +3,7 @@
 One MCP endpoint per developer; behind it three engines, isolated per scope; one shared inference backend that is the
 only place text can leave the stack.
 
-> **Viewing tip.** Each diagram is also rendered as an SVG you can open on its own and zoom without limit:
-> [img/system.svg](img/system.svg) and [img/task-flow.svg](img/task-flow.svg). Inline, GitHub shows a zoom/full-screen
-> toolbar when you hover a diagram; VS Code's preview needs the *Markdown Preview Mermaid Support* extension and only
-> scales with the whole preview (Cmd/Ctrl +). Regenerate the SVGs after editing a diagram: `make diagrams`.
-
 ## System
-
-[![System architecture](img/system.svg)](img/system.svg)
-
-<details><summary>Mermaid source</summary>
 
 ```mermaid
 %%{init: {
@@ -129,8 +120,6 @@ flowchart LR
     style SRC fill:#1f2937,stroke:#9ca3af,stroke-width:2px,stroke-dasharray:5 4,color:#f9fafb
 ```
 
-</details>
-
 **Reading it**
 
 - **Blue** is the only thing agents talk to. The gateway computes the caller's scopes from the proxy's identity
@@ -145,10 +134,6 @@ flowchart LR
 Colors are set explicitly (dark palette), so the diagrams look the same on GitHub light and dark themes.
 
 ## One task, end to end
-
-[![One task end to end](img/task-flow.svg)](img/task-flow.svg)
-
-<details><summary>Mermaid source</summary>
 
 ```mermaid
 %%{init: {
@@ -210,8 +195,6 @@ sequenceDiagram
     H->>M: extract facts, embed
     G-->>A: operation id
 ```
-
-</details>
 
 The identity headers are the whole trust model: they exist only because the proxy is the single route to the
 gateway. Everything downstream carries service credentials that clients never see (LightRAG API key, Hindsight
