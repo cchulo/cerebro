@@ -17,8 +17,8 @@ def safe(name):  # LightRAG workspace: a-z A-Z 0-9 _
 LIGHTRAG_ENV = {
     "HOST": "0.0.0.0", "PORT": "9621", "WORKING_DIR": "/app/data/rag_storage", "INPUT_DIR": "/app/data/inputs",
     "LIGHTRAG_API_KEY": "${LIGHTRAG_API_KEY}",
-    "LLM_BINDING": "ollama", "LLM_BINDING_HOST": "http://ollama:11434", "LLM_MODEL": "${LLM_MODEL}", "OLLAMA_LLM_NUM_CTX": "32768",
-    "EMBEDDING_BINDING": "ollama", "EMBEDDING_BINDING_HOST": "http://ollama:11434",
+    "LLM_BINDING": "ollama", "LLM_BINDING_HOST": "${OLLAMA_URL:-http://ollama:11434}", "LLM_MODEL": "${LLM_MODEL}", "OLLAMA_LLM_NUM_CTX": "32768",
+    "EMBEDDING_BINDING": "ollama", "EMBEDDING_BINDING_HOST": "${OLLAMA_URL:-http://ollama:11434}",
     "EMBEDDING_MODEL": "${EMBED_MODEL}", "EMBEDDING_DIM": "${EMBED_DIM}",
     "LIGHTRAG_KV_STORAGE": "PGKVStorage", "LIGHTRAG_DOC_STATUS_STORAGE": "PGDocStatusStorage",
     "LIGHTRAG_VECTOR_STORAGE": "PGVectorStorage", "LIGHTRAG_GRAPH_STORAGE": "PGTableGraphStorage",

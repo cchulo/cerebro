@@ -1,5 +1,6 @@
 # Agent context stack: memory (Hindsight) + documents (LightRAG) + code (Sourcebot, CodeGraphContext)
 # Works with `docker compose` and `podman compose`. GPU: add -f compose.gpu.yaml.
+# Ollama already on the host (e.g. Apple silicon): add -f compose.host-ollama.yaml instead of running the ollama container.
 #
 #   cp .env.example .env && edit
 #   docker compose up -d postgres ollama && ./scripts/pull-models.sh
@@ -10,9 +11,6 @@
 # Ports: gateway 8090 (loopback), Hindsight 8888 / UI 9999, Sourcebot 3000, ingest 8080
 
 name: agent-context-stack
-
-x-ollama-env: &ollama_env
-  OLLAMA_URL: http://ollama:11434
 
 services:
 
@@ -64,7 +62,7 @@ services:
     environment:
       HINDSIGHT_API_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/hindsight
       HINDSIGHT_API_LLM_PROVIDER: ollama
-      HINDSIGHT_API_LLM_BASE_URL: http://ollama:11434
+      HINDSIGHT_API_LLM_BASE_URL: ${OLLAMA_URL:-http://ollama:11434}
       HINDSIGHT_API_LLM_MODEL: ${LLM_MODEL}
       HINDSIGHT_API_LLM_API_KEY: ollama          # unused by Ollama but must be non-empty
       HINDSIGHT_API_WORKER_ID: hindsight-1       # stable id so in-flight tasks survive restarts
