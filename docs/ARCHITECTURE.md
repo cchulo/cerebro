@@ -150,7 +150,7 @@ Colors are set explicitly (dark palette), so the diagrams look the same on GitHu
     "loopTextColor": "#f8fafc",
     "noteBkgColor": "#d97706", "noteBorderColor": "#fde68a", "noteTextColor": "#ffffff",
     "activationBkgColor": "#1d4ed8", "activationBorderColor": "#93c5fd",
-    "sequenceNumberColor": "#ffffff"
+    "sequenceNumberColor": "#0b1220"
   },
   "sequence": { "mirrorActors": false, "actorMargin": 40, "messageMargin": 34, "boxMargin": 8 }
 }}%%
