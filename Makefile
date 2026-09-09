@@ -5,7 +5,7 @@ COMPOSE ?= docker compose -f docker/compose.yaml -f docker/compose.scopes.yaml $
 PYTHON  ?= python3
 SCOPES  ?= $(shell $(PYTHON) -c "import yaml;print(' '.join(yaml.safe_load(open('config/scopes.yaml'))['scopes']))")
 
-.PHONY: gen up down build models index sync smoke logs ps test-env k8s-apply k8s-status
+.PHONY: gen up down build models index sync smoke logs ps test-env k8s-apply k8s-status source-check
 gen:     ; $(PYTHON) scripts/gen-scopes.py compose > docker/compose.scopes.yaml && $(PYTHON) scripts/gen-scopes.py k8s
 build:   ; $(COMPOSE) build
 up:      ; $(COMPOSE) up -d
@@ -15,6 +15,8 @@ models:  ; ./scripts/pull-models.sh
 index:   ; for s in $(SCOPES); do $(COMPOSE) --profile jobs run --rm indexer-$$s; done
 sync:    ; curl -fsS -X POST localhost:8080/sync/all -H "X-Ingest-Secret: $$(grep ^INGEST_WEBHOOK_SECRET config/stack.env | cut -d= -f2)"
 smoke:   ; $(PYTHON) scripts/smoke-test.py $(ARGS)
+# list what an adapter would ingest for a scope, without LightRAG:  make source-check SCOPE=public SOURCE=confluence
+source-check: ; $(COMPOSE) run --rm --no-deps ingest python -m ingest.check $(SCOPE) $(SOURCE) $(ARGS)
 logs:    ; $(COMPOSE) logs -f --tail=100
 # mock Confluence/Backstage + fixture docs (see docker/compose.test.yaml); then: make sync && make smoke ARGS=--live
 test-env: ; $(COMPOSE) -f docker/compose.test.yaml up -d --build

@@ -2,13 +2,13 @@
 (ownedBy, partOf, dependsOn, providesApi, consumesApi, ...) are written as explicit sentences so LightRAG's
 entity/relation extraction picks them up cleanly.
 
-Scope config:  docs: { backstage: {} }                     whole catalog (org-wide metadata)
-               docs: { backstage: { kinds: [Component, API] } }
-Env:           BACKSTAGE_URL, BACKSTAGE_TOKEN (optional)
+Scope config:   docs: { backstage: {} }                     whole catalog (org-wide metadata)
+                docs: { backstage: { kinds: [Component, API] } }
+Env:            BACKSTAGE_URL, BACKSTAGE_TOKEN (optional)
+sources: option backstage: { url: ... }   (optional, overrides BACKSTAGE_URL)
 """
 import hashlib
 import httpx
-from ..config import BACKSTAGE_URL, BACKSTAGE_TOKEN
 from .base import Source, Document, ScopeContext
 
 DEFAULT_KINDS = ["Component", "System", "API", "Domain", "Resource", "Group"]
@@ -17,12 +17,17 @@ DEFAULT_KINDS = ["Component", "System", "API", "Domain", "Resource", "Group"]
 class BackstageSource(Source):
     name = "backstage"
 
+    def __init__(self, options=None):
+        super().__init__(options)
+        self.url = (self.option("url") or self.env("BACKSTAGE_URL")).rstrip("/")
+        self.token = self.env("BACKSTAGE_TOKEN")
+
     def configured(self) -> bool:
-        return bool(BACKSTAGE_URL)
+        return bool(self.url)
 
     def _entities(self, kinds):
-        headers = {"Authorization": f"Bearer {BACKSTAGE_TOKEN}"} if BACKSTAGE_TOKEN else {}
-        with httpx.Client(base_url=BACKSTAGE_URL, headers=headers, timeout=60) as c:
+        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        with httpx.Client(base_url=self.url, headers=headers, timeout=60) as c:
             for kind in kinds:
                 r = c.get("/api/catalog/entities", params={"filter": f"kind={kind}"})
                 r.raise_for_status()

@@ -1,15 +1,17 @@
 """Git docs adapter: shallow-clone each of the scope's repos and ingest matching Markdown/text files
 (README, docs/, ADRs, runbooks). Source code is deliberately NOT ingested; that is the code layer's job.
 
-Scope config:  docs: { git: {} }                                  uses the scope's `repos`
-               docs: { git: { globs: ["README.md", "docs/**/*.md"] } }
-Env:           GIT_DOC_GLOBS (default globs), GITHUB_TOKEN (private GitHub repos)
+Scope config:   docs: { git: {} }                                  uses the scope's `repos`
+                docs: { git: { globs: ["README.md", "docs/**/*.md"] } }
+Env:            GIT_DOC_GLOBS (default globs, comma-separated), GITHUB_TOKEN (private GitHub repos)
+sources: option git: { globs: [...] }
 Webhook filter: {"repo": "https://github.com/org/x.git"}
 """
-import hashlib, subprocess, tempfile
+import hashlib, os, subprocess, tempfile
 from pathlib import Path
-from ..config import GIT_DOC_GLOBS, GITHUB_TOKEN
 from .base import Source, Document, ScopeContext
+
+DEFAULT_GLOBS = ["README.md", "docs/**/*.md", "adr/**/*.md", "runbooks/**/*.md"]
 
 
 def repo_name(url: str) -> str:
@@ -17,16 +19,21 @@ def repo_name(url: str) -> str:
 
 
 def _auth(url: str) -> str:
-    if GITHUB_TOKEN and url.startswith("https://github.com/"):
-        return url.replace("https://", f"https://x-access-token:{GITHUB_TOKEN}@", 1)
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if token and url.startswith("https://github.com/"):
+        return url.replace("https://", f"https://x-access-token:{token}@", 1)
     return url
 
 
 class GitDocsSource(Source):
     name = "git"
 
+    def _globs(self, ctx: ScopeContext) -> list[str]:
+        return (ctx.config.get("globs") or self.option("globs")
+                or [g.strip() for g in self.env("GIT_DOC_GLOBS").split(",") if g.strip()] or DEFAULT_GLOBS)
+
     def documents(self, ctx: ScopeContext, filter: dict | None = None):
-        globs = ctx.config.get("globs") or GIT_DOC_GLOBS
+        globs = self._globs(ctx)
         repos = ctx.repos
         if filter and filter.get("repo"):
             want = filter["repo"].rstrip("/").removesuffix(".git").lower()

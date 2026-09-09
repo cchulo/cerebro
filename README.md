@@ -9,7 +9,7 @@ Self-hosted context stack for AI agents:
 | Documents | [LightRAG](https://github.com/HKUDS/LightRAG), **one instance per scope** | What the docs say: Confluence, Backstage, repo docs, ADRs |
 | Code search | [Sourcebot](https://github.com/sourcebot-dev/sourcebot) | Exact / symbol search across remote repos, repo-filtered per user |
 | Code graph | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) + FalkorDB, **one pair per scope** | Call graph, blast radius (runs as `codegraph-<scope>`, exposed as the `code_graph` tool) |
-| Ingest | `./ingest` (this repo) | Syncs Confluence, Backstage and Git docs into the right scope |
+| Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through adapters (Confluence, Backstage, git docs, files built in; drop-in plugins for the rest) |
 | Shared | Postgres + pgvector, Ollama, Redis | One DB, one local model endpoint |
 
 **Access control is built in**: `config/scopes.yaml` maps IdP groups → scopes → Confluence spaces + repos. Each scope
@@ -50,6 +50,7 @@ docker/compose.scopes.yaml  GENERATED (make gen, gitignored) per-scope LightRAG 
 docker/compose.*.yaml   overrides: host Ollama, NVIDIA GPU, test environment
 config/stack.env        secrets + inference backend (copy from config/stack.env.example; gitignored)
 config/scopes.yaml      access scopes: groups -> repos + document sources (edit this, then regenerate)
+plugins/                drop-in document source adapters (auto-discovered; plugins/jama.py is the example)
 config/proxy/           example SSO reverse-proxy config
 scripts/gen-scopes.py   regenerates docker/compose.scopes.yaml and k8s/generated/ from config/
 k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)
@@ -70,6 +71,7 @@ scripts/pull-models.sh  pulls the Ollama models
 Full walkthrough, including what every file in `config/` is for: **[docs/SETUP.md](docs/SETUP.md)**.
 Diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Why these engines, search vs graph, the CodeGraph name
 collision, memory vs documents, licences: **[docs/ENGINES.md](docs/ENGINES.md)**.
+Adding a document source (JAMA, exports, internal APIs) is one file in `plugins/`: **[docs/SOURCES.md](docs/SOURCES.md)**.
 
 
 ```sh

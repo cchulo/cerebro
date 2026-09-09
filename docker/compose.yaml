@@ -137,9 +137,11 @@ services:
       INGEST_WEBHOOK_SECRET: ${INGEST_WEBHOOK_SECRET}
       INGEST_SCHEDULE_CRON: ${INGEST_SCHEDULE_CRON}
       STATE_DIR: /state
+      INGEST_PLUGINS_DIR: /plugins
     volumes:
       - ingest_state:/state
       - ../config/scopes.yaml:/config/scopes.yaml:ro
+      - ../plugins:/plugins:ro            # drop-in source adapters (plugins/README.md)
     ports:
       - "127.0.0.1:8080:8080"   # POST /webhook/{confluence|backstage|git}, POST /sync/{source}, GET /health
 

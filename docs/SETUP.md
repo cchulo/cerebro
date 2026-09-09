@@ -27,6 +27,7 @@ docker/                   Compose files: compose.yaml (shared services), compose
                           compose.host-ollama.yaml, compose.gpu.yaml, compose.test.yaml (overrides). Paths inside are
                           relative to docker/; the Makefile passes the right -f flags
 config/                   everything you edit — see section 3
+plugins/                  drop-in document source adapters, auto-discovered — see docs/SOURCES.md
 k8s/                      Kubernetes manifests: base/ hand-written, generated/ (make gen) — see section 6
 mcp/gateway/              the identity-aware MCP gateway (Python, FastMCP)
 mcp/codegraph-mcp/        CodeGraphContext image with an HTTP MCP bridge; also runs the indexer job
@@ -196,11 +197,11 @@ and its indexer job, so use a ReadWriteMany StorageClass or pin both to one node
 
 ## 7. Adding a document source
 
-Write a class deriving from `ingest/ingest/sources/base.py:Source` with one method, `documents(ctx, filter)`, that
-yields `Document(key, version, text, title)`; the engine handles diffing, batching into LightRAG, deletions and
-state. Declare it in `scopes.yaml` under `sources:` and reference it from a scope's `docs:`. The adapter must only
-yield what the whole scope may read; anything with a finer ACL is skipped, never yielded. The four built-ins are the
-reference implementations.
+Drop a Python file into `plugins/` with a class deriving from `Source` that yields `Document(key, version, text,
+title)` from one method, `documents(ctx, filter)`; it is discovered at startup under its `name` and a scope
+references it under `docs:`. No registration, no image rebuild, no change to the ingest. Secrets come from
+`stack.env`, options from `sources:`. `plugins/jama.py` is a complete example; `make source-check SCOPE=... SOURCE=...`
+lists what an adapter would ingest without touching LightRAG. Full walkthrough: [SOURCES.md](SOURCES.md).
 
 ## 8. Upgrading and changing things
 

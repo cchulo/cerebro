@@ -120,6 +120,10 @@ def k8s():
     for name, src in {"scopes.yaml": "config/scopes.yaml", "config.json": "config/sourcebot/config.json",
                       "init.sql": "config/postgres/init.sql"}.items():
         (out / name).write_text((root / src).read_text())
+    plug = out / "plugins"; plug.mkdir()
+    for f in sorted((root / "plugins").glob("*.py")) + [root / "plugins/README.md"]:
+        if f.exists():
+            (plug / f.name).write_text(f.read_text())
     lightrag_env = {k: (v if not v.startswith("${") else None) for k, v in LIGHTRAG_ENV.items()}
     resources = []
     for name, sc in scopes.items():
@@ -295,9 +299,11 @@ configMapGenerator:
     files: [init.sql]
   - name: index-script
     files: [index-repo.sh]
+  - name: ingest-plugins
+    files: [PLUGIN_FILES]
 generatorOptions:
   disableNameSuffixHash: true
-""")
+""".replace("PLUGIN_FILES", ", ".join(f"plugins/{f.name}" for f in sorted(plug.iterdir()))))
     print(f"wrote k8s/generated for scopes: {', '.join(scopes)}")
 
 

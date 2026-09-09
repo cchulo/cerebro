@@ -13,9 +13,10 @@ identity:
   always_groups: [everyone]
   team_banks_from_groups: true         # group "payments-team" -> shared Hindsight bank "team-payments-team"
 
-# Document source adapters (ingest/ingest/sources). Built-ins need no declaration: confluence, backstage, git, files.
-# Declare an entry to pass adapter options or to plug in your own class:
-#   jira: { type: "my_adapters.jira:JiraSource", jql: "project = PAY" }
+# Document source adapters. Built-ins: confluence, backstage, git, files. Any *.py dropped into plugins/ (see
+# plugins/README.md, plugins/jama.py) or any installed package with a `context_stack.sources` entry point adds more,
+# with no declaration here. This optional map only carries non-secret adapter options (secrets stay in stack.env):
+#   jama: { url: https://jama.internal, page_size: 100 }
 sources: {}
 
 scopes:
