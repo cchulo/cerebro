@@ -9,7 +9,7 @@ sources: option backstage: { url: ... }   (optional, overrides BACKSTAGE_URL)
 """
 import hashlib
 import httpx
-from ingest.sources import Source, Document, ScopeContext
+from stack_plugins import Plugin, Source, Document, ScopeContext
 
 DEFAULT_KINDS = ["Component", "System", "API", "Domain", "Resource", "Group"]
 
@@ -54,3 +54,6 @@ class BackstageSource(Source):
             yield Document(key=f"{e['kind'].lower()}/{md.get('namespace', 'default')}/{md['name']}",
                            version=hashlib.sha256(text.encode()).hexdigest()[:16],
                            text=text, title=f"{e['kind']} {md['name']}")
+
+
+PLUGIN = Plugin(name="backstage", source=BackstageSource, description="Backstage software catalog: entities and relations as text")

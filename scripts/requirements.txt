@@ -1,3 +1,5 @@
 # host-side tooling: scripts/gen-scopes.py, scripts/smoke-test.py, Makefile
 pyyaml>=6
 mcp>=1.30,<2
+httpx>=0.27
+markdownify>=0.13

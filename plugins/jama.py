@@ -11,7 +11,7 @@ Webhook filter: {"project": 42}
 """
 import hashlib, html, re
 import httpx
-from ingest.sources import Source, Document, ScopeContext
+from stack_plugins import Plugin, Source, Document, ScopeContext
 
 
 def _strip_html(s: str) -> str:
@@ -75,3 +75,6 @@ class JamaSource(Source):
         if not filter:
             return True
         return bool(filter.get("project")) and key.startswith(f"{int(filter['project'])}/")
+
+
+PLUGIN = Plugin(name="jama", source=JamaSource, description="Jama Connect items per project (example, unverified against a live instance)")

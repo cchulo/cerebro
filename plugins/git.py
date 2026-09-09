@@ -9,7 +9,7 @@ Webhook filter: {"repo": "https://github.com/org/x.git"}
 """
 import hashlib, os, subprocess, tempfile
 from pathlib import Path
-from ingest.sources import Source, Document, ScopeContext
+from stack_plugins import Plugin, Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["README.md", "docs/**/*.md", "adr/**/*.md", "runbooks/**/*.md"]
 
@@ -57,3 +57,6 @@ class GitDocsSource(Source):
         if not filter:
             return True
         return bool(filter.get("repo")) and key.startswith(repo_name(filter["repo"]) + "/")
+
+
+PLUGIN = Plugin(name="git", source=GitDocsSource, description="Markdown/docs inside the scope's code repositories")

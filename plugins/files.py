@@ -5,7 +5,7 @@ Scope config:  docs: { files: { paths: ["/data/docs/public"], globs: ["**/*.md",
 """
 import hashlib
 from pathlib import Path
-from ingest.sources import Source, Document, ScopeContext
+from stack_plugins import Plugin, Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["**/*.md", "**/*.markdown", "**/*.txt", "**/*.rst"]
 
@@ -27,3 +27,6 @@ class FilesSource(Source):
                     text = f.read_text(errors="ignore")
                     yield Document(key=f"{root.name}/{rel}", version=hashlib.sha256(text.encode()).hexdigest()[:16],
                                    text=f"Source: {root}/{rel}\n\n{text}", title=rel)
+
+
+PLUGIN = Plugin(name="files", source=FilesSource, description="Text files from directories mounted into the ingest")
