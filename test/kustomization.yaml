@@ -1,4 +1,4 @@
-# Test environment on Kubernetes: the full stack (../k8s) + mock Confluence (REST and MCP upstream) / Backstage + fixture docs.
+# Test environment on Kubernetes: the full stack (../k8s) + mock Confluence / Backstage (+ the real mcp-atlassian pointed at the mock) + fixture docs.
 #   docker compose -f docker/compose.yaml -f docker/compose.test.yaml build mock-confluence   (image for the mocks)
 #   kubectl apply -k test
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -17,6 +17,20 @@ configMapGenerator:
 generatorOptions:
   disableNameSuffixHash: true
 patches:
+  - target: { kind: Deployment, name: mcp-confluence }
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: { name: mcp-confluence }
+      spec:
+        template:
+          spec:
+            containers:
+              - name: mcp
+                env:
+                  - { name: CONFLUENCE_URL, value: http://mock-confluence:8000 }
+                  - { name: CONFLUENCE_USERNAME, value: test }
+                  - { name: CONFLUENCE_API_TOKEN, value: test }
   - target: { kind: Deployment, name: gateway }
     patch: |-
       apiVersion: apps/v1

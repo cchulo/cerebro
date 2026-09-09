@@ -96,7 +96,8 @@ flowchart LR
     GW -->|"scopes of caller"| CG
     GW -->|"repo filter"| SB
     GW -->|"caller's banks"| HS
-    GW -.->|"live fallback on index miss<br/>same scopes · REST or upstream MCP"| CONF
+    MCPA["mcp-confluence<br/><small>upstream MCP (mcp-atlassian)<br/>declared by the plugin</small>"]:::job
+    GW -.->|"live fallback on index miss<br/>same scopes"| MCPA -.-> CONF
 
     CONF & BS --> ING
     GIT --> ING
@@ -132,7 +133,8 @@ flowchart LR
   CodeGraphContext use no model. Point it at local Ollama or at an endpoint your organisation controls.
 - **Dashed** boxes are read-only sources; nothing is ever written back to them. The dashed edge from the gateway is
   the live fallback: when a scope's index has no answer, the gateway queries the system of record for that scope's
-  spaces (directly or through an upstream MCP server) and returns refs to fetch. Plugins under `plugins/live/`.
+  spaces (through the upstream MCP server the plugin declares, or REST) and returns refs to fetch. One plugin file
+  per source carries the ingest part, the fallback part and the upstream image (`plugins/`).
 - **Naming**: CodeGraphContext is the product (`cgc`). `codegraph-<scope>` is our container/Service running it,
   `mcp/codegraph-mcp/` its image, and `code_graph` the gateway tool that proxies it. One thing, three handles.
 
@@ -169,7 +171,7 @@ sequenceDiagram
     participant S as Sourcebot
     participant C as CodeGraphContext (scope)
     participant M as Inference backend
-    participant R as System of record (Confluence)
+    participant R as mcp-atlassian → Confluence
 
     A->>P: MCP over HTTPS (session cookie / token)
     P->>G: + X-Forwarded-User, X-Forwarded-Groups
@@ -188,7 +190,7 @@ sequenceDiagram
     alt index had an answer
         G-->>A: answer with source ids
     else index miss (no context)
-        G->>R: live search, CQL confined to the caller's spaces (REST or upstream MCP)
+        G->>R: confluence_search, CQL confined to the caller's spaces
         R-->>G: hits (space re-checked, restricted pages dropped)
         G-->>A: fallback refs
         A->>G: live_fetch(ref)

@@ -12,9 +12,10 @@ different engine, isolated per **scope** (an IdP group):
 | Layer | Engine | Fed by |
 |---|---|---|
 | Agent memory (what happened before) | Hindsight | agents calling `retain`; nothing else |
-| Documents (what the docs say) | LightRAG, one instance per scope | the ingest service through plugins (`plugins/sources/`: Confluence, Backstage, git docs, files, yours) |
+| Documents (what the docs say) | LightRAG, one instance per scope | the ingest service through plugins (`plugins/`: Confluence, Backstage, git docs, files, yours) |
 | Code search | Sourcebot, one instance | Sourcebot syncs the repos itself |
 | Code graph (callers, blast radius) | CodeGraphContext + FalkorDB, one pair per scope | the per-scope indexer job |
+| Live fallback (when the index misses) | each plugin's live part, e.g. Confluence via the mcp-atlassian upstream it declares (`mcp-confluence`) | the same credentials; confined per scope by the gateway |
 | Shared | Postgres + pgvector, Redis, an inference backend (Ollama or an org-approved endpoint) | |
 
 The only text that ever leaves the stack goes to the inference backend you configure. See "What the model sees"
@@ -27,7 +28,8 @@ docker/                   Compose files: compose.yaml (shared services), compose
                           compose.host-ollama.yaml, compose.gpu.yaml, compose.test.yaml (overrides). Paths inside are
                           relative to docker/; the Makefile passes the right -f flags
 config/                   everything you edit — see section 3
-plugins/                  drop-in document source adapters, auto-discovered — see docs/SOURCES.md
+plugins/                  one file per source (ingest part, live fallback, MCP upstream image), auto-discovered — docs/PLUGINS.md
+sdk/                      the stack_plugins framework those files use (installed in the ingest and gateway images)
 k8s/                      Kubernetes manifests: base/ hand-written, generated/ (make gen) — see section 6
 mcp/gateway/              the identity-aware MCP gateway (Python, FastMCP)
 mcp/codegraph-mcp/        CodeGraphContext image with an HTTP MCP bridge; also runs the indexer job
@@ -57,7 +59,7 @@ The single environment file for the whole stack. Compose reads it for variable i
 | Hindsight | `HINDSIGHT_API_KEY`, `HINDSIGHT_CP_ACCESS_KEY`, `HINDSIGHT_RERANKER` | API key every call must carry (only the gateway has it); UI login key; `local` reranker (one-time model download) or `rrf` (none) |
 | LightRAG | `LIGHTRAG_API_KEY` | shared by all scope instances; only ingest and gateway hold it |
 | Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` | generate the two secrets with `openssl rand -base64 33` / `24`; the API key is created in Sourcebot's UI after first start |
-| Ingest | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the shipped adapters; leave a block empty and that adapter reports "not configured" |
+| Ingest + live fallback | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the shipped adapters and for mcp-atlassian; leave a block empty and that adapter reports "not configured" |
 
 Generate real secrets before the first start; every `change-me` value is a placeholder.
 
@@ -198,11 +200,12 @@ and its indexer job, so use a ReadWriteMany StorageClass or pin both to one node
 
 ## 7. Adding a document source
 
-Drop a Python file into `plugins/` with a class deriving from `Source` that yields `Document(key, version, text,
-title)` from one method, `documents(ctx, filter)`; it is discovered at startup under its `name` and a scope
-references it under `docs:`. No registration, no image rebuild, no change to the ingest. Secrets come from
-`stack.env`, options from `sources:`. `plugins/jama.py` is a complete example; `make source-check SCOPE=... SOURCE=...`
-lists what an adapter would ingest without touching LightRAG. Full walkthrough: [SOURCES.md](SOURCES.md).
+One file in `plugins/` with `PLUGIN = Plugin(name=..., source=..., live=..., mcp=...)`: the ingest part yields
+`Document(key, version, text, title)`, the optional live part answers `search`/`fetch` under the caller's scopes, and
+the optional `McpUpstream` names an MCP server image that `make gen` runs as `mcp-<name>`. Discovered at startup, no
+registration, no rebuild. Secrets from `stack.env`, options from `sources:`/`live:`, what-belongs-where from a
+scope's `docs:`. `make source-check SCOPE=... SOURCE=...` lists what the ingest part yields without LightRAG.
+Full guide: [PLUGINS.md](PLUGINS.md); the freshness model: [SOURCES.md](SOURCES.md).
 
 ## 8. Upgrading and changing things
 

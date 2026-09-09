@@ -9,7 +9,8 @@ Self-hosted context stack for AI agents:
 | Documents | [LightRAG](https://github.com/HKUDS/LightRAG), **one instance per scope** | What the docs say: Confluence, Backstage, repo docs, ADRs |
 | Code search | [Sourcebot](https://github.com/sourcebot-dev/sourcebot) | Exact / symbol search across remote repos, repo-filtered per user |
 | Code graph | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) + FalkorDB, **one pair per scope** | Call graph, blast radius (runs as `codegraph-<scope>`, exposed as the `code_graph` tool) |
-| Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through plugins (`plugins/sources/`: Confluence, Backstage, git docs, files shipped; add your own the same way) |
+| Live fallback | each plugin's live part, e.g. Confluence through [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) (declared by the plugin, run as `mcp-confluence`) | When a scope's index has no answer: search/read the system of record, confined to the caller's scopes |
+| Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through plugins (`plugins/`: Confluence, Backstage, git docs, files shipped; add your own the same way) |
 | Shared | Postgres + pgvector, Ollama, Redis | One DB, one local model endpoint |
 
 **Access control is built in**: `config/scopes.yaml` maps IdP groups → scopes → code repos + document sources. Each scope
@@ -50,7 +51,8 @@ docker/compose.scopes.yaml  GENERATED (make gen, gitignored) per-scope LightRAG 
 docker/compose.*.yaml   overrides: host Ollama, NVIDIA GPU, test environment
 config/stack.env        secrets + inference backend (copy from config/stack.env.example; gitignored)
 config/scopes.yaml      access scopes: groups -> code repos + document sources, one unit for both (edit, then regenerate)
-plugins/                every source is a plugin: sources/ (ingest adapters), live/ (query-time fallbacks); auto-discovered
+plugins/                one file per source: ingest part + live fallback + MCP upstream image, auto-discovered (docs/PLUGINS.md)
+sdk/                    stack_plugins, the framework plugin files use
 config/proxy/           example SSO reverse-proxy config
 scripts/gen-scopes.py   regenerates docker/compose.scopes.yaml and k8s/generated/ from config/
 k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)
@@ -71,7 +73,8 @@ scripts/pull-models.sh  pulls the Ollama models
 Full walkthrough, including what every file in `config/` is for: **[docs/SETUP.md](docs/SETUP.md)**.
 Diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Why these engines, search vs graph, the CodeGraph name
 collision, memory vs documents, licences: **[docs/ENGINES.md](docs/ENGINES.md)**.
-Adding a document source (JAMA, exports, internal APIs) is one file in `plugins/`: **[docs/SOURCES.md](docs/SOURCES.md)**.
+Adding a source (JAMA, exports, internal APIs) is one file in `plugins/`: **[docs/PLUGINS.md](docs/PLUGINS.md)**; how ingest
+and fallbacks relate and stay fresh: **[docs/SOURCES.md](docs/SOURCES.md)**.
 
 
 ```sh
@@ -142,6 +145,7 @@ All image tags are pinned; the gateway and ingest code were checked against thes
 | supergateway | 3.4.3 | stdio → streamable HTTP bridge |
 | python `mcp` | `>=1.30,<2` | 2.x renamed FastMCP; 1.x `stateless_http`, request headers via `ctx.request_context.request` |
 | FalkorDB / Postgres / Redis / Ollama | `v4.20.4` / `pgvector 0.8.2-pg17` / `7.4-alpine` / `0.33.3` | |
+| mcp-atlassian | `ghcr.io/sooperset/mcp-atlassian:0.23.1` (MIT) | streamable-http `--stateless --read-only --enabled-tools confluence_search,confluence_get_page`; `confluence_search(query, limit, spaces_filter)`, `confluence_get_page(page_id, include_metadata, convert_to_markdown)` → `{metadata, content}`; unauthenticated requests need `ALLOW_GLOBAL_CRED_FALLBACK=true` |
 | Kubernetes | OrbStack k3s-based `v1.35.6+orb1` | `kubectl apply -k test`: all pods ready, sync + indexer CronJob + gateway verified; same manifests target any k3s |
 
 Notes that shaped the code:

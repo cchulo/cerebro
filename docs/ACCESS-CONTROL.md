@@ -16,7 +16,7 @@ So the access boundary has to be the **index**, not the query.
 - `groups`: IdP groups allowed to read it (`everyone` = any authenticated user)
 - `code.repos`: repositories indexed into it (code → Sourcebot + CodeGraphContext, docs inside them → the `git` plugin)
 - `docs`: document sources indexed into it, one entry per plugin (`confluence: {spaces: [...]}`,
-  `backstage: {}`, `git: {}`, `files: {paths: [...]}`, or any plugin in `plugins/sources/`) → this scope's LightRAG
+  `backstage: {}`, `git: {}`, `files: {paths: [...]}`, or any plugin in `plugins/`) → this scope's LightRAG
 
 One scope therefore answers both questions, what documents and what code a group may see, and the gateway applies
 it to every tool the same way.

@@ -7,10 +7,12 @@ services:
     build: ../test/mock
     environment: { MOCK: confluence }
     volumes: ["../test/fixtures:/fixtures:ro"]
-  mock-confluence-mcp:                 # upstream MCP server shaped like mcp-atlassian, for `via: mcp`
-    build: ../test/mock
-    command: ["python", "mcp_app.py"]
-    volumes: ["../test/fixtures:/fixtures:ro"]
+  mcp-confluence:                      # the plugin-declared upstream (mcp-atlassian), pointed at the mock Confluence
+    depends_on: [mock-confluence]
+    environment:
+      CONFLUENCE_URL: http://mock-confluence:8000
+      CONFLUENCE_USERNAME: test
+      CONFLUENCE_API_TOKEN: test
   mock-backstage:
     build: ../test/mock
     environment: { MOCK: backstage }
@@ -25,7 +27,7 @@ services:
       BACKSTAGE_TOKEN: ""
     volumes: ["../test/docs:/data/docs:ro"]
   gateway:
-    depends_on: [mock-confluence, mock-confluence-mcp]
+    depends_on: [mock-confluence, mcp-confluence]
     environment:
       CONFLUENCE_URL: http://mock-confluence:8000
       CONFLUENCE_USER: test

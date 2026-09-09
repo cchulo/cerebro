@@ -24,13 +24,13 @@ spec:
             - { name: SCOPES_FILE, value: /config/scopes.yaml }
             - { name: LIGHTRAG_URL_TEMPLATE, value: "http://lightrag-{scope}:9621" }
             - { name: STATE_DIR, value: /state }
-            - { name: INGEST_PLUGINS_DIR, value: /plugins/sources }
+            - { name: PLUGINS_DIR, value: /plugins }
           ports: [{ containerPort: 8080 }]
           volumeMounts:
             - { name: scopes, mountPath: /config, readOnly: true }
             - { name: state, mountPath: /state }
             - { name: docs, mountPath: /data/docs, readOnly: true }   # `files` adapter input
-            - { name: plugins, mountPath: /plugins/sources, readOnly: true }   # drop-in adapters (plugins/sources)
+            - { name: plugins, mountPath: /plugins, readOnly: true }   # every source is a plugin (plugins/)
       volumes:
         - name: scopes
           configMap: { name: scopes-config }
@@ -39,7 +39,7 @@ spec:
         - name: docs
           emptyDir: {}     # replace with a PVC / hostPath / NFS holding exported documents
         - name: plugins
-          configMap: { name: ingest-plugins }
+          configMap: { name: plugins }
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

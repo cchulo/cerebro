@@ -51,6 +51,9 @@ if MODE == "confluence":
     def search(cql: str, limit: int = 25, expand: str = ""):
         # understands:  type=page AND space in ("A","B") AND text ~ "words"
         spaces = re.findall(r'"([^"]+)"', cql.split("space in", 1)[1].split(")", 1)[0]) if "space in" in cql else None
+        extra = re.findall(r"space\s*=\s*\"?([A-Za-z0-9_-]+)\"?", cql)          # spaces_filter: (space = ENG OR space = DOCS)
+        if extra:
+            spaces = [s for s in (spaces or extra) if s in extra]
         m = re.search(r'text ~ "((?:[^"\\]|\\.)*)"', cql)
         words = (m.group(1).replace('\\"', '"') if m else "").lower().split()
         hits = []
@@ -64,6 +67,15 @@ if MODE == "confluence":
                 hits.append((score, q))
         hits = [q for _, q in sorted(hits, key=lambda x: -x[0])]
         return {"results": hits[:limit], "size": min(len(hits), limit)}
+
+    @app.get("/rest/api/search")
+    def search_api(cql: str, start: int = 0, limit: int = 25, expand: str = ""):
+        """Newer search API (used by mcp-atlassian): results wrap the content object and carry an excerpt."""
+        hits = search(cql, limit=1000)["results"]
+        page = hits[start:start + limit]
+        return {"results": [{"content": {k: v for k, v in h.items() if k != "excerpt"}, "excerpt": h["excerpt"],
+                             "title": h["title"], "url": h["_links"]["webui"], "entityType": "content"} for h in page],
+                "start": start, "limit": limit, "size": len(page), "totalSize": len(hits), "cqlQuery": cql}
 
     @app.get("/rest/api/content/{page_id}")
     def get_page(page_id: str, expand: str = ""):

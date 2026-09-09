@@ -33,7 +33,7 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 |---|---|
 | `list_scopes` | which scopes, repos and memory banks this user can use |
 | `query_docs(query, mode, scopes?)` | Confluence / Backstage / repo docs across the user's scopes (mode mix/local/global/hybrid/naive) |
-| `live_search(source, query, scopes?)` / `live_fetch(source, ref)` | the system of record (e.g. Confluence) directly, when the index missed or may lag; same scopes, restricted pages never served; `query_docs` falls back to them automatically |
+| `live_search(source, query, scopes?)` / `live_fetch(source, ref)` | the system of record directly through the plugin's live part (Confluence via mcp-atlassian), when the index missed or may lag; same scopes, restricted pages never served; `query_docs` falls back to them automatically |
 | `search_code(query, max_results, regex)` | Zoekt search (`file:`, `lang:`, `sym:`, `rev:` for indexed branches, `-`, `or`), restricted to the user's repos |
 | `code_graph(scope, tool, arguments)` | read-only CodeGraphContext tools (`find_code`, `analyze_code_relationships`, `execute_cypher_query`, ...) inside one scope |
 | `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group (`budget` low/mid/high) |

@@ -6,9 +6,9 @@
 # Per scope the stack runs its own LightRAG (docs graph) and its own FalkorDB + CodeGraphContext (code graph).
 # Sourcebot stays a single instance; the gateway restricts every search to the repos of the caller's scopes.
 #
-# Everything that reads a source is a plugin under plugins/ (nothing is built in):
-#   plugins/sources/*.py  ingest adapters, referenced by name under a scope's `docs:`   (docs/SOURCES.md)
-#   plugins/live/*.py     query-time fallbacks, enabled under the top-level `live:`
+# Everything that reads a source is ONE plugin file under plugins/ (docs/PLUGINS.md); nothing is built in. A plugin can
+# carry an ingest part (referenced by name under a scope's `docs:`), a live-fallback part (used automatically when the
+# scope's index has no answer) and the MCP upstream image that fallback needs (run as `mcp-<plugin>` by `make gen`).
 # The values below are a working example: public GitHub repos and the fixture spaces served by the test environment.
 
 identity:
@@ -21,11 +21,10 @@ identity:
 #   jama: { url: https://jama.internal, page_size: 100 }
 sources: {}
 
-# Query-time fallbacks against the system of record, confined to the same per-scope `docs:` entries.
-# query_docs consults them automatically when a scope's index has no answer (fallback: true, the default);
-# live_search / live_fetch expose them directly.
-live:
-  confluence: { via: rest }            # or: { via: mcp, url: http://mcp-atlassian:9000/mcp, auth_env: ATLASSIAN_MCP_TOKEN }
+# Live fallbacks are declared by the plugins themselves and enabled whenever a plugin ships a live part. This optional
+# map only overrides per plugin: { enabled: false } | { fallback: false } (explicit live_search only) | { via: rest }
+# (skip the upstream MCP) | { url: ..., auth_env: ... } (an upstream you run elsewhere).
+live: {}
 
 scopes:
   public:
