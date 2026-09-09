@@ -218,7 +218,9 @@ label (other projects, hand-made volumes) is ever touched.
 
 | Command | Effect |
 |---|---|
-| `scripts/up.sh` | regenerate, build images, `docker compose up`, wait for every service |
+| `scripts/up.sh` | regenerate, build images, `docker compose up`, wait for every service; every phase prints a timestamped line |
+| `scripts/up.sh --sync --wait` | ... then keep showing documents processed per scope until all are done |
+| `scripts/status.sh` / `--watch` / `--k8s` | is it working, is it progressing (section 9) |
 | `scripts/up.sh --test --host-ollama --index --sync` | test environment with host Ollama, then index every scope's code and sync all sources |
 | `scripts/up.sh --k8s [--test]` | `kubectl apply -k k8s` (or `test`) and wait for pods |
 | `scripts/down.sh` | remove containers and networks, keep data volumes |
@@ -227,7 +229,25 @@ label (other projects, hand-made volumes) is ever touched.
 | `scripts/down.sh --all-targets --volumes` (= `make nuke`) | complete teardown of both compose and Kubernetes; images kept |
 | `scripts/down.sh --nuke` | the above plus every built and pulled image |
 
-## 9. Upgrading and changing things
+## 9. Checking progress (it is not stuck)
+
+The slow part of any bring-up is LightRAG extracting documents with the model; the containers are up long before
+that finishes, and nothing prints while it runs. Use these to see progress:
+
+| Docker Compose | Kubernetes |
+|---|---|
+| `make status` (once) / `make status ARGS=--watch` (every 15 s) | `make k8s-status` / `make k8s-status ARGS=--watch` |
+| `scripts/up.sh ... --sync --wait` keeps showing progress after starting | `scripts/up.sh --k8s ... --sync --wait` |
+| `docker compose -f docker/compose.yaml -f docker/compose.scopes.yaml logs -f lightrag-<scope>` | `kubectl -n context-stack logs -f deploy/lightrag-<scope>` |
+| `docker compose ... logs -f ingest` (what was listed and handed over) | `kubectl -n context-stack logs -f deploy/ingest` |
+| `docker compose ... ps` | `kubectl -n context-stack get pods -w` |
+
+`status` shows, per scope, `processed/total` documents with the pipeline's latest message, which repositories the
+code graph has indexed, the last sync line and the health of memory and search. "processed" counts documents whose
+extraction is finished; `query_docs` answers only from those. A `failed` count means the model endpoint was
+unreachable during extraction (section 12).
+
+## 10. Upgrading and changing things
 
 | Change | Do |
 |---|---|
@@ -238,7 +258,7 @@ label (other projects, hand-made volumes) is ever touched.
 | new scope | add it to `scopes.yaml`, `make gen`, deploy, `make index`, `make sync` — it costs one LightRAG + one FalkorDB/CodeGraphContext pair |
 | removed scope | on Kubernetes also `kubectl -n context-stack delete all,pvc -l scope=<name>` |
 
-## 10. Performance: what the model endpoint has to do
+## 11. Performance: what the model endpoint has to do
 
 Nothing in the stack is slow by itself; the cost is LLM calls, and every LightRAG instance and Hindsight share the
 one endpoint in `stack.env`. Measured on an M-series laptop with `qwen3.6:35b-mlx`: 79 tokens/s generation,
@@ -265,7 +285,7 @@ Queueing is the real enemy: a query waits behind every in-flight extraction call
 Schedule ingest when nobody is querying (the crons default to 02:00/03:00), and expect the first sync of a large
 space to take hours on a single local model regardless of settings.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 - `gateway` refuses every call with "missing X-Forwarded-User": the request did not come through the proxy (or the
   smoke test URL is wrong). This is by design.
