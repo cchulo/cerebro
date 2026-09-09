@@ -24,13 +24,13 @@ spec:
             - { name: SCOPES_FILE, value: /config/scopes.yaml }
             - { name: LIGHTRAG_URL_TEMPLATE, value: "http://lightrag-{scope}:9621" }
             - { name: STATE_DIR, value: /state }
-            - { name: INGEST_PLUGINS_DIR, value: /plugins }
+            - { name: INGEST_PLUGINS_DIR, value: /plugins/sources }
           ports: [{ containerPort: 8080 }]
           volumeMounts:
             - { name: scopes, mountPath: /config, readOnly: true }
             - { name: state, mountPath: /state }
             - { name: docs, mountPath: /data/docs, readOnly: true }   # `files` adapter input
-            - { name: plugins, mountPath: /plugins, readOnly: true }   # drop-in adapters (plugins/)
+            - { name: plugins, mountPath: /plugins/sources, readOnly: true }   # drop-in adapters (plugins/sources)
       volumes:
         - name: scopes
           configMap: { name: scopes-config }

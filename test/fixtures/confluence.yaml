@@ -12,6 +12,11 @@ spaces:
       version: 5
       ancestors: [Engineering, Runbooks]
       body: "<h1>Deploy runbook</h1><p>Deployments of the checkout service use the <code>shipit</code> CLI: <code>shipit deploy checkout --env prod</code> from the release branch. The on-call SRE (team sre-core) approves in #deploys first. Rollback: <code>shipit rollback checkout</code>. Runbook id ENG-DEPLOY-3302.</p>"
+    - id: 1003
+      title: Incident retro template
+      version: 1
+      ancestors: [Engineering, Process]
+      body: "<h1>Incident retro template</h1><p>Every SEV1 gets a blameless retro within five working days using this template: timeline, contributing factors, action items with owners. Template code HALCYON-8834.</p>"
   DOCS:
     - id: 2001
       title: Onboarding

@@ -14,10 +14,12 @@ So the access boundary has to be the **index**, not the query.
 `config/scopes.yaml` defines **scopes**. A scope is a permission group with:
 
 - `groups`: IdP groups allowed to read it (`everyone` = any authenticated user)
-- `repos`: repositories indexed into it (code → Sourcebot + CodeGraphContext)
-- `docs`: document sources indexed into it, one entry per adapter (`confluence: {spaces: [...]}`,
-  `backstage: {}`, `git: {}` for docs inside `repos`, `files: {paths: [...]}`, or your own adapter declared under
-  top-level `sources:`) → this scope's LightRAG
+- `code.repos`: repositories indexed into it (code → Sourcebot + CodeGraphContext, docs inside them → the `git` plugin)
+- `docs`: document sources indexed into it, one entry per plugin (`confluence: {spaces: [...]}`,
+  `backstage: {}`, `git: {}`, `files: {paths: [...]}`, or any plugin in `plugins/sources/`) → this scope's LightRAG
+
+One scope therefore answers both questions, what documents and what code a group may see, and the gateway applies
+it to every tool the same way.
 
 Rules enforced by the generator and the ingest service:
 
@@ -33,7 +35,10 @@ Rules enforced by the generator and the ingest service:
    and additionally drops any result outside the allowlist.
 5. Hindsight: `user-<id>` banks are private; `team-<group>` banks are shared with that IdP group only. Hindsight
    itself requires an API key on every call (`HINDSIGHT_API_KEY`) that only the gateway holds.
-6. `code_graph` proxies a fixed allowlist of read-only CodeGraphContext tools; indexing, watching, deleting and
+6. Live sources (`live_search`, `live_fetch`, and the automatic fallback in `query_docs`) are confined by the gateway
+   to the caller's scopes using the same `docs:` entries: it builds the upstream query itself and re-checks every
+   result's space, whether the transport is REST or an upstream MCP server (docs/SOURCES.md, "Fallbacks").
+7. `code_graph` proxies a fixed allowlist of read-only CodeGraphContext tools; indexing, watching, deleting and
    bundle loading are only reachable from the server-side `indexer-<scope>` job.
 
 ## Identity

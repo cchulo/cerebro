@@ -12,7 +12,7 @@ Self-hosted context stack for AI agents:
 | Ingest | `./ingest` (this repo) | Syncs any document source into the right scope through adapters (Confluence, Backstage, git docs, files built in; drop-in plugins for the rest) |
 | Shared | Postgres + pgvector, Ollama, Redis | One DB, one local model endpoint |
 
-**Access control is built in**: `config/scopes.yaml` maps IdP groups → scopes → Confluence spaces + repos. Each scope
+**Access control is built in**: `config/scopes.yaml` maps IdP groups → scopes → code repos + document sources. Each scope
 is an isolated docs graph and code graph; the gateway only queries the scopes the caller belongs to. Read
 [docs/ACCESS-CONTROL.md](docs/ACCESS-CONTROL.md) before adding anything sensitive.
 
@@ -49,8 +49,8 @@ docker/compose.yaml     shared services + Hindsight + Sourcebot + ingest + gatew
 docker/compose.scopes.yaml  GENERATED (make gen, gitignored) per-scope LightRAG / FalkorDB / CodeGraph / indexer services
 docker/compose.*.yaml   overrides: host Ollama, NVIDIA GPU, test environment
 config/stack.env        secrets + inference backend (copy from config/stack.env.example; gitignored)
-config/scopes.yaml      access scopes: groups -> repos + document sources (edit this, then regenerate)
-plugins/                drop-in document source adapters (auto-discovered; plugins/jama.py is the example)
+config/scopes.yaml      access scopes: groups -> code repos + document sources, one unit for both (edit, then regenerate)
+plugins/                every source is a plugin: sources/ (ingest adapters), live/ (query-time fallbacks); auto-discovered
 config/proxy/           example SSO reverse-proxy config
 scripts/gen-scopes.py   regenerates docker/compose.scopes.yaml and k8s/generated/ from config/
 k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)

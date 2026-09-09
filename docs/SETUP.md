@@ -12,7 +12,7 @@ different engine, isolated per **scope** (an IdP group):
 | Layer | Engine | Fed by |
 |---|---|---|
 | Agent memory (what happened before) | Hindsight | agents calling `retain`; nothing else |
-| Documents (what the docs say) | LightRAG, one instance per scope | the ingest service (adapters: Confluence, Backstage, git docs, files, your own) |
+| Documents (what the docs say) | LightRAG, one instance per scope | the ingest service through plugins (`plugins/sources/`: Confluence, Backstage, git docs, files, yours) |
 | Code search | Sourcebot, one instance | Sourcebot syncs the repos itself |
 | Code graph (callers, blast radius) | CodeGraphContext + FalkorDB, one pair per scope | the per-scope indexer job |
 | Shared | Postgres + pgvector, Redis, an inference backend (Ollama or an org-approved endpoint) | |
@@ -63,23 +63,24 @@ Generate real secrets before the first start; every `change-me` value is a place
 
 ### `config/scopes.yaml` — who may see what
 
-The access model. Each **scope** lists the IdP `groups` allowed to read it, the `repos` indexed into it (code
-search + code graph, and the docs inside them via the `git` adapter), and `docs`, a map of adapter name → adapter
-config for the documents indexed into it. A repo or Confluence space may appear in exactly one scope; the ingest
-refuses to start otherwise.
+The access model, and the one place where document access and code access are defined together. Each **scope**
+lists the IdP `groups` allowed to read it, `code.repos` (code search, code graph, and the docs inside those repos
+via the `git` plugin) and `docs`, a map of adapter name → what of that source belongs to the scope. A repo or
+Confluence space may appear in exactly one scope; the ingest refuses to start otherwise.
 
 ```yaml
 scopes:
   payments:
     groups: [payments-team, platform-leads]
-    repos: [https://github.com/your-org/payments.git]
+    code:
+      repos: [https://github.com/your-org/payments.git]
     docs:
       confluence: { spaces: [PAY] }
       git: {}
 ```
 
-The `identity` block names the headers the SSO proxy sets, and `sources:` declares custom adapters
-(`type: "my_pkg.jira:JiraSource"`). The shipped file is a working example against public GitHub repos and the mock
+The `identity` block names the headers the SSO proxy sets; `sources:` carries non-secret adapter options; `live:`
+enables query-time fallbacks (docs/SOURCES.md). The shipped file is a working example against public GitHub repos and the mock
 Confluence/Backstage in `test/`, so the test environment runs without edits. Whenever you change this file:
 `make gen`, then `make up` (compose) or `kubectl apply -k k8s`.
 

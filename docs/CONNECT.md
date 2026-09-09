@@ -33,6 +33,7 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 |---|---|
 | `list_scopes` | which scopes, repos and memory banks this user can use |
 | `query_docs(query, mode, scopes?)` | Confluence / Backstage / repo docs across the user's scopes (mode mix/local/global/hybrid/naive) |
+| `live_search(source, query, scopes?)` / `live_fetch(source, ref)` | the system of record (e.g. Confluence) directly, when the index missed or may lag; same scopes, restricted pages never served; `query_docs` falls back to them automatically |
 | `search_code(query, max_results, regex)` | Zoekt search (`file:`, `lang:`, `sym:`, `rev:` for indexed branches, `-`, `or`), restricted to the user's repos |
 | `code_graph(scope, tool, arguments)` | read-only CodeGraphContext tools (`find_code`, `analyze_code_relationships`, `execute_cypher_query`, ...) inside one scope |
 | `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group (`budget` low/mid/high) |
@@ -83,6 +84,7 @@ The name `context` in the slash commands is whatever you called the server when 
 ```
 Use the `context` MCP server:
 - query_docs: what our documentation, ADRs, runbooks and Backstage catalog say ("how do we", "who owns", "policy").
+  If it returns `fallback` hits, the index had no answer: live_fetch the relevant ref.
 - search_code: find exact code, symbols, file paths across repos.
 - code_graph: callers/callees, blast radius, dead code — structural questions. Call list_scopes first to pick the scope.
 - recall at the start of a task for prior context; retain at the end with outcomes, decisions and anything the docs got wrong.

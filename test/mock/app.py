@@ -4,8 +4,8 @@ MOCK=confluence : GET /rest/api/content?spaceKey=..&start=..&limit=..   (Conflue
 MOCK=backstage  : GET /api/catalog/entities?filter=kind=..              (Backstage catalog shape)
 Fixtures: /fixtures/confluence.yaml, /fixtures/backstage.yaml
 """
-import os, yaml
-from fastapi import FastAPI, Query
+import os, re, yaml
+from fastapi import FastAPI, HTTPException, Query
 
 MODE = os.environ.get("MOCK", "confluence")
 FIX = yaml.safe_load(open(f"/fixtures/{MODE}.yaml"))
@@ -40,6 +40,37 @@ if MODE == "confluence":
         if start + limit < len(out):
             links["next"] = f"/rest/api/content?spaceKey={spaceKey}&start={start + limit}&limit={limit}"
         return {"results": page, "start": start, "limit": limit, "size": len(page), "_links": links}
+
+    def _all_pages():
+        for sk in FIX.get("spaces", {}):
+            for p in content(sk, 0, 10000)["results"]:
+                p["space"] = {"key": sk}
+                yield p
+
+    @app.get("/rest/api/content/search")
+    def search(cql: str, limit: int = 25, expand: str = ""):
+        # understands:  type=page AND space in ("A","B") AND text ~ "words"
+        spaces = re.findall(r'"([^"]+)"', cql.split("space in", 1)[1].split(")", 1)[0]) if "space in" in cql else None
+        m = re.search(r'text ~ "((?:[^"\\]|\\.)*)"', cql)
+        words = (m.group(1).replace('\\"', '"') if m else "").lower().split()
+        hits = []
+        for p in _all_pages():
+            if spaces is not None and p["space"]["key"] not in spaces:
+                continue
+            hay = (p["title"] + " " + p["body"]["storage"]["value"]).lower()
+            score = sum(1 for w in words if w in hay)
+            if words and score:
+                q = dict(p); q["excerpt"] = re.sub("<[^>]+>", "", p["body"]["storage"]["value"])[:200]
+                hits.append((score, q))
+        hits = [q for _, q in sorted(hits, key=lambda x: -x[0])]
+        return {"results": hits[:limit], "size": min(len(hits), limit)}
+
+    @app.get("/rest/api/content/{page_id}")
+    def get_page(page_id: str, expand: str = ""):
+        for p in _all_pages():
+            if p["id"] == page_id:
+                return p
+        raise HTTPException(404, "page not found")
 
 else:
     @app.get("/api/catalog/entities")

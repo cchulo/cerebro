@@ -10,6 +10,7 @@ Questions that come up when people first read the stack. Short answers first, de
 | Why one LightRAG per scope instead of one big one? | A graph index merges knowledge across documents at index time; filtering results afterwards leaks. The boundary has to be the index. |
 | What is FalkorDB doing there? | It is only the database CodeGraphContext writes its graph into. Nothing talks to it directly except CodeGraphContext and the indexer job. |
 | Which engines call the LLM? | LightRAG and Hindsight. Sourcebot and CodeGraphContext use no model. |
+| What if the index misses or lags? | `query_docs` falls back to the enabled live sources (REST or an upstream MCP such as mcp-atlassian) for the same scopes and returns refs to `live_fetch`; see [SOURCES.md](SOURCES.md#fallbacks-live-sources-and-mcp-upstreams). |
 | Are documents fetched when I query? | No. The ingest pulls on webhooks, a schedule or on demand and only changed documents are re-ingested; queries read the index. See [SOURCES.md](SOURCES.md#freshness-when-documents-are-pulled). |
 | Anything not truly open source? | Sourcebot (FSL-1.1, source-available) and FalkorDB (SSPL v1, not OSI-approved). Everything else is MIT / Apache / BSD / PostgreSQL. |
 

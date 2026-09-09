@@ -137,7 +137,7 @@ services:
       INGEST_WEBHOOK_SECRET: ${INGEST_WEBHOOK_SECRET}
       INGEST_SCHEDULE_CRON: ${INGEST_SCHEDULE_CRON}
       STATE_DIR: /state
-      INGEST_PLUGINS_DIR: /plugins
+      INGEST_PLUGINS_DIR: /plugins/sources
     volumes:
       - ingest_state:/state
       - ../config/scopes.yaml:/config/scopes.yaml:ro
@@ -162,8 +162,14 @@ services:
       SOURCEBOT_API_KEY: ${SOURCEBOT_API_KEY}
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
       PORT: 8090
+      # live sources (live_search / live_fetch): same credentials as the ingest, confined per scope by the gateway
+      CONFLUENCE_URL: ${CONFLUENCE_URL}
+      CONFLUENCE_USER: ${CONFLUENCE_USER}
+      CONFLUENCE_TOKEN: ${CONFLUENCE_TOKEN}
+      GATEWAY_PLUGINS_DIR: /plugins/live
     volumes:
       - ../config/scopes.yaml:/config/scopes.yaml:ro
+      - ../plugins:/plugins:ro
     ports:
       - "127.0.0.1:8090:8090"   # loopback only: the SSO proxy fronts it
 

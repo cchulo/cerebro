@@ -15,7 +15,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP, Context
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
-from . import acl
+from . import acl, live
 
 HINDSIGHT = os.environ.get("HINDSIGHT_URL", "http://hindsight:8888")
 HINDSIGHT_KEY = os.environ.get("HINDSIGHT_API_KEY", "")      # HINDSIGHT_API_TENANT_API_KEY on the engine side
@@ -32,6 +32,8 @@ INSTRUCTIONS = """Organisation context server. Use it before guessing.
 - search_code: exact code, symbols, file paths across the repositories you may read.
 - code_graph: callers/callees, blast radius, dead code - structural questions. Call list_scopes first to pick the scope.
 - recall: at the START of a task, look up prior context (what was tried, decisions, corrections).
+- live_search / live_fetch: when query_docs has no answer, search or read the system of record directly (Confluence, ...)
+  within the same scopes; the index may lag a change by minutes.
 - retain: at the END of a task, store the outcome in one or two sentences: what changed, decisions made, anything
   the docs got wrong. Use the personal bank unless the whole team should know (team bank from list_scopes).
 Never retain content from restricted documents into a team bank. Prefer citing sources returned by query_docs."""
@@ -64,10 +66,13 @@ def _decode_source(file_path: str) -> str:
     return file_path.replace("|", "/")
 
 @mcp.tool()
-async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[str] | None = None) -> dict:
+async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[str] | None = None,
+                     fallback: bool = True) -> dict:
     """Ask the documentation knowledge graphs (Confluence, Backstage, repo docs, ADRs).
     mode: local (specific facts) | global (themes across docs) | hybrid | mix (graph + vector, default) | naive (vector only).
-    Only scopes the user may read are queried; omit `scopes` to query all of them."""
+    Only scopes the user may read are queried; omit `scopes` to query all of them. If a scope's index has no answer
+    and fallback is true, the enabled live sources (systems of record) are searched for that scope and their hits are
+    returned under `fallback` for live_fetch."""
     c = _caller(ctx)
     if mode not in DOC_MODES:
         raise ValueError(f"mode must be one of {DOC_MODES}")
@@ -88,13 +93,81 @@ async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[s
             answer = body.get("response") or ""
             for ref in refs:                               # the answer text cites the encoded ids too
                 answer = answer.replace(ref.get("file_path", ""), _decode_source(ref.get("file_path", "")))
-            return {"scope": scope, "answer": answer,
+            return {"scope": scope, "answer": answer, "indexed_answer": bool(body.get("llm_generated", True)) and bool(refs),
                     "references": [{"id": ref.get("reference_id"), "source": _decode_source(ref.get("file_path", ""))}
                                    for ref in refs]}
 
     results = await asyncio.gather(*(one(s) for s in targets), return_exceptions=True)
-    return {"results": [r if not isinstance(r, Exception) else {"scope": s, "error": str(r)}
-                        for s, r in zip(targets, results)]}
+    results = [r if not isinstance(r, Exception) else {"scope": s, "error": str(r), "indexed_answer": False}
+               for s, r in zip(targets, results)]
+    out = {"results": results}
+    missed = [r["scope"] for r in results if not r.get("indexed_answer")]
+    if fallback and missed:
+        out["fallback"] = await _fallback_search(c, query, missed)
+    return out
+
+
+_STOP = set("a an the of to in on for and or is are was were be been do does did how what which who whom whose when where why "
+            "can could should would will shall may might must i we you they it this that these those with without from by as at "
+            "into about our your their its my me us them there here please tell explain describe find show".split())
+
+def _keywords(query: str, limit: int = 8) -> str:
+    """Systems of record search by terms, not sentences: keep the distinctive words of the question."""
+    words = [w for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9_\-./]*", query) if w.lower() not in _STOP and len(w) > 1]
+    seen, out = set(), []
+    for w in words:
+        if w.lower() not in seen:
+            seen.add(w.lower()); out.append(w)
+    return " ".join(out[:limit]) or query
+
+async def _fallback_search(c: acl.Caller, query: str, scopes: list[str]) -> dict:
+    """Live sources with fallback enabled, searched for the scopes whose index missed."""
+    hits = {}
+    query = _keywords(query)
+    for name, opts in acl.LIVE.items():
+        if opts.get("fallback", True) is False:
+            continue
+        allowed = acl.live_allowed(c, name, scopes)
+        if not allowed:
+            continue
+        try:
+            res = await _live(name).search(query, allowed, limit=5)
+        except Exception as e:                                   # a dead upstream must not break query_docs
+            hits[name] = {"error": str(e)[:200]}
+            continue
+        if res:
+            hits[name] = {"query": query, "results": res,
+                          "note": f"index had no answer for {scopes}; use live_fetch(\"{name}\", ref) to read one"}
+    return hits
+
+# ----------------------------------------------------------------------------- live sources
+def _live(name: str) -> live.LiveSource:
+    if name not in acl.LIVE:
+        raise PermissionError(f"live source '{name}' is not enabled; enabled: {sorted(acl.LIVE)}")
+    src = live.load(name, acl.LIVE[name])
+    if not src.configured():
+        raise RuntimeError(f"live source '{name}' is enabled but not configured (missing credentials)")
+    return src
+
+@mcp.tool()
+async def live_search(ctx: Context, source: str, query: str, scopes: list[str] | None = None, limit: int = 10) -> dict:
+    """Search a system of record directly (e.g. source="confluence") when query_docs missed or may be stale.
+    Confined to the spaces/projects of the caller's scopes; restricted pages are never returned. Returns refs for live_fetch."""
+    c = _caller(ctx)
+    allowed = acl.live_allowed(c, source, scopes)
+    if not allowed:
+        return {"source": source, "results": [], "note": f"none of your scopes lists '{source}'"}
+    return {"source": source, "allowed": allowed, "results": await _live(source).search(query, allowed, limit)}
+
+@mcp.tool()
+async def live_fetch(ctx: Context, source: str, ref: str, max_chars: int = 20000) -> dict:
+    """Read one item from a system of record by the ref live_search returned (e.g. a Confluence page id).
+    Refused if the item is outside the caller's scopes or carries its own read restriction."""
+    c = _caller(ctx)
+    allowed = acl.live_allowed(c, source)
+    if not allowed:
+        raise PermissionError(f"none of your scopes lists '{source}'")
+    return await _live(source).fetch(ref, allowed, max_chars)
 
 # ----------------------------------------------------------------------------- code search
 def _repo_name(url: str) -> str | None:

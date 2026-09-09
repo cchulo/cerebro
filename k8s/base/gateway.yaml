@@ -26,8 +26,13 @@ spec:
             - { name: HINDSIGHT_URL, value: http://hindsight:8888 }
             - { name: SOURCEBOT_URL, value: http://sourcebot:3000 }
             - { name: PORT, value: "8090" }
+            - { name: GATEWAY_PLUGINS_DIR, value: /plugins/live }
           ports: [{ containerPort: 8090 }]
-          volumeMounts: [{ name: scopes, mountPath: /config, readOnly: true }]
+          volumeMounts:
+            - { name: scopes, mountPath: /config, readOnly: true }
+            - { name: plugins, mountPath: /plugins/live, readOnly: true }
       volumes:
         - name: scopes
           configMap: { name: scopes-config }
+        - name: plugins
+          configMap: { name: gateway-plugins }
