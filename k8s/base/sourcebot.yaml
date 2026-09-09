@@ -15,6 +15,11 @@ spec:
   template:
     metadata: { labels: { app: sourcebot } }
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: docker.io/pgvector/pgvector:0.8.2-pg17
+          envFrom: [{ secretRef: { name: stack-env } }]
+          command: ["sh", "-c", "until pg_isready -h postgres -U \"$POSTGRES_USER\"; do sleep 2; done"]
       containers:
         - name: sourcebot
           image: ghcr.io/sourcebot-dev/sourcebot:v5.1.10

@@ -78,7 +78,11 @@ make smoke                         # access-control checks against the gateway
 ```
 
 Sourcebot: open http://localhost:3000 once, create an API key (Settings → API keys) and put it in `.env` as
-`SOURCEBOT_API_KEY`, then `make up` again. With an NVIDIA GPU add `EXTRA="-f compose.gpu.yaml"`. Re-run `make gen`
+`SOURCEBOT_API_KEY`, then `make up` again.
+
+No Confluence/Backstage to test against? `make test-env` starts mock Confluence and Backstage serving
+`test/fixtures` and mounts `test/docs`; the example `config/scopes.yaml` already points at them and at public
+GitHub repos, so `make sync && make smoke ARGS=--live` proves isolation end to end (on Kubernetes: `kubectl apply -k test`). With an NVIDIA GPU add `EXTRA="-f compose.gpu.yaml"`. Re-run `make gen`
 whenever `scopes.yaml` changes.
 
 ## Kubernetes (k3s, OrbStack, any cluster)
@@ -128,6 +132,7 @@ All image tags are pinned; the gateway and ingest code were checked against thes
 | supergateway | 3.4.3 | stdio → streamable HTTP bridge |
 | python `mcp` | `>=1.30,<2` | 2.x renamed FastMCP; 1.x `stateless_http`, request headers via `ctx.request_context.request` |
 | FalkorDB / Postgres / Redis / Ollama | `v4.20.4` / `pgvector 0.8.2-pg17` / `7.4-alpine` / `0.33.3` | |
+| Kubernetes | OrbStack k3s-based `v1.35.6+orb1` | `kubectl apply -k test`: all pods ready, sync + indexer CronJob + gateway verified; same manifests target any k3s |
 
 Notes that shaped the code:
 

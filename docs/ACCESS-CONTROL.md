@@ -46,7 +46,8 @@ Agents never reach the engines directly. They talk to the **gateway** (`mcp/gate
   scope, filters `search_code`, and pins `recall`/`retain`/`reflect` to allowed banks.
 
 The gateway trusts those headers because **only the proxy can reach port 8090**. Keep it on loopback or an
-internal network. An example oauth2-proxy + Caddy config is in `config/proxy/`.
+internal network (compose binds every port to 127.0.0.1; on Kubernetes every Service is ClusterIP and only the
+SSO Ingress you add may route to `svc/gateway`). An example oauth2-proxy + Caddy config is in `config/proxy/`.
 
 ## What you give up
 

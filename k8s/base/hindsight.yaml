@@ -17,6 +17,12 @@ spec:
   template:
     metadata: { labels: { app: hindsight } }
     spec:
+      # Hindsight runs migrations at startup and exits if Postgres is not up yet; wait instead of crash-looping.
+      initContainers:
+        - name: wait-for-postgres
+          image: docker.io/pgvector/pgvector:0.8.2-pg17
+          envFrom: [{ secretRef: { name: stack-env } }]
+          command: ["sh", "-c", "until pg_isready -h postgres -U \"$POSTGRES_USER\"; do sleep 2; done"]
       containers:
         - name: hindsight
           image: ghcr.io/vectorize-io/hindsight:0.9.2

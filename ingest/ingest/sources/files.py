@@ -20,9 +20,10 @@ class FilesSource(Source):
                 continue
             for pattern in ctx.config.get("globs", DEFAULT_GLOBS):
                 for f in sorted(root.glob(pattern)):
-                    if not f.is_file():
-                        continue
                     rel = f.relative_to(root).as_posix()
+                    # skip dot-dirs: Kubernetes ConfigMap mounts expose files twice via ..data/ symlinks
+                    if not f.is_file() or any(part.startswith(".") for part in rel.split("/")):
+                        continue
                     text = f.read_text(errors="ignore")
                     yield Document(key=f"{root.name}/{rel}", version=hashlib.sha256(text.encode()).hexdigest()[:16],
                                    text=f"Source: {root}/{rel}\n\n{text}", title=rel)
