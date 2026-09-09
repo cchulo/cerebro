@@ -21,32 +21,32 @@ only place text can leave the stack.
     "fontFamily": "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
     "fontSize": "14px",
     "background": "#0b1220",
-    "primaryColor": "#1e293b",
-    "primaryTextColor": "#f1f5f9",
-    "primaryBorderColor": "#475569",
-    "secondaryColor": "#1e293b",
-    "tertiaryColor": "#111827",
-    "textColor": "#e2e8f0",
-    "titleColor": "#e2e8f0",
-    "lineColor": "#94a3b8",
-    "clusterBkg": "#111827",
-    "clusterBorder": "#334155",
-    "edgeLabelBackground": "#0b1220",
-    "nodeTextColor": "#f1f5f9"
+    "primaryColor": "#334155",
+    "primaryTextColor": "#ffffff",
+    "primaryBorderColor": "#94a3b8",
+    "secondaryColor": "#334155",
+    "tertiaryColor": "#1f2937",
+    "textColor": "#f8fafc",
+    "titleColor": "#f8fafc",
+    "lineColor": "#cbd5e1",
+    "clusterBkg": "#1f2937",
+    "clusterBorder": "#64748b",
+    "edgeLabelBackground": "#1e293b",
+    "nodeTextColor": "#ffffff"
   },
   "flowchart": { "curve": "basis", "nodeSpacing": 30, "rankSpacing": 55, "padding": 12 }
 }}%%
 flowchart LR
-    classDef client fill:#0c4a6e,stroke:#38bdf8,stroke-width:1.5px,color:#f0f9ff
-    classDef edge fill:#1e293b,stroke:#94a3b8,stroke-width:1.5px,color:#f1f5f9
-    classDef gateway fill:#1d4ed8,stroke:#93c5fd,stroke-width:2px,color:#ffffff
-    classDef docs fill:#6d28d9,stroke:#c4b5fd,stroke-width:1.5px,color:#ffffff
-    classDef code fill:#047857,stroke:#6ee7b7,stroke-width:1.5px,color:#ffffff
-    classDef memory fill:#b45309,stroke:#fcd34d,stroke-width:1.5px,color:#ffffff
-    classDef infra fill:#334155,stroke:#94a3b8,stroke-width:1.5px,color:#f1f5f9
-    classDef job fill:#1e293b,stroke:#94a3b8,stroke-width:1.5px,stroke-dasharray:4 3,color:#f1f5f9
-    classDef external fill:#111827,stroke:#94a3b8,stroke-width:1.5px,stroke-dasharray:5 4,color:#cbd5e1
-    classDef model fill:#be123c,stroke:#fda4af,stroke-width:2px,color:#ffffff
+    classDef client fill:#0369a1,stroke:#7dd3fc,stroke-width:2px,color:#ffffff
+    classDef edge fill:#475569,stroke:#cbd5e1,stroke-width:2px,color:#ffffff
+    classDef gateway fill:#2563eb,stroke:#bfdbfe,stroke-width:2.5px,color:#ffffff
+    classDef docs fill:#7c3aed,stroke:#ddd6fe,stroke-width:2px,color:#ffffff
+    classDef code fill:#059669,stroke:#a7f3d0,stroke-width:2px,color:#ffffff
+    classDef memory fill:#d97706,stroke:#fde68a,stroke-width:2px,color:#ffffff
+    classDef infra fill:#64748b,stroke:#e2e8f0,stroke-width:2px,color:#ffffff
+    classDef job fill:#475569,stroke:#e2e8f0,stroke-width:2px,stroke-dasharray:4 3,color:#ffffff
+    classDef external fill:#374151,stroke:#d1d5db,stroke-width:2px,stroke-dasharray:5 4,color:#f9fafb
+    classDef model fill:#e11d48,stroke:#fecdd3,stroke-width:2.5px,color:#ffffff
 
     subgraph DEV[" Developers "]
         direction TB
@@ -118,15 +118,15 @@ flowchart LR
     LRAG & HS & SB --> PG
     SB --> RD
 
-    style STACK fill:#0f172a,stroke:#64748b,stroke-width:2px,color:#e2e8f0
-    style SCOPE fill:#1e1b4b,stroke:#a78bfa,stroke-width:1.5px,color:#e2e8f0
-    style SHARED fill:#052e2b,stroke:#34d399,stroke-width:1.5px,color:#e2e8f0
-    style PIPE fill:#111827,stroke:#475569,stroke-width:1.5px,color:#e2e8f0
-    style INFRA fill:#111827,stroke:#475569,stroke-width:1.5px,color:#e2e8f0
-    style MODEL fill:#2a0a12,stroke:#fb7185,stroke-width:2px,stroke-dasharray:6 4,color:#fecdd3
-    style DEV fill:#082f49,stroke:#38bdf8,stroke-width:1.5px,color:#e0f2fe
-    style EDGE fill:#111827,stroke:#94a3b8,stroke-width:1.5px,color:#e2e8f0
-    style SRC fill:#0b1220,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 4,color:#cbd5e1
+    style STACK fill:#1e293b,stroke:#94a3b8,stroke-width:2.5px,color:#f8fafc
+    style SCOPE fill:#312e81,stroke:#c4b5fd,stroke-width:2px,color:#f8fafc
+    style SHARED fill:#065f46,stroke:#6ee7b7,stroke-width:2px,color:#f8fafc
+    style PIPE fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#f8fafc
+    style INFRA fill:#334155,stroke:#94a3b8,stroke-width:2px,color:#f8fafc
+    style MODEL fill:#881337,stroke:#fda4af,stroke-width:2.5px,stroke-dasharray:6 4,color:#fff1f2
+    style DEV fill:#0c4a6e,stroke:#7dd3fc,stroke-width:2px,color:#f0f9ff
+    style EDGE fill:#334155,stroke:#cbd5e1,stroke-width:2px,color:#f8fafc
+    style SRC fill:#1f2937,stroke:#9ca3af,stroke-width:2px,stroke-dasharray:5 4,color:#f9fafb
 ```
 
 </details>
@@ -158,13 +158,13 @@ Colors are set explicitly (dark palette), so the diagrams look the same on GitHu
     "fontSize": "13px",
     "background": "#0b1220",
     "textColor": "#e2e8f0",
-    "actorBkg": "#1e293b", "actorBorder": "#64748b", "actorTextColor": "#f1f5f9",
-    "actorLineColor": "#475569",
-    "signalColor": "#94a3b8", "signalTextColor": "#e2e8f0",
-    "labelBoxBkgColor": "#1e293b", "labelBoxBorderColor": "#475569", "labelTextColor": "#e2e8f0",
-    "loopTextColor": "#e2e8f0",
-    "noteBkgColor": "#3b2a06", "noteBorderColor": "#f59e0b", "noteTextColor": "#fde68a",
-    "activationBkgColor": "#1e3a8a", "activationBorderColor": "#60a5fa",
+    "actorBkg": "#2563eb", "actorBorder": "#bfdbfe", "actorTextColor": "#ffffff",
+    "actorLineColor": "#94a3b8",
+    "signalColor": "#e2e8f0", "signalTextColor": "#ffffff",
+    "labelBoxBkgColor": "#334155", "labelBoxBorderColor": "#94a3b8", "labelTextColor": "#f8fafc",
+    "loopTextColor": "#f8fafc",
+    "noteBkgColor": "#d97706", "noteBorderColor": "#fde68a", "noteTextColor": "#ffffff",
+    "activationBkgColor": "#1d4ed8", "activationBorderColor": "#93c5fd",
     "sequenceNumberColor": "#ffffff"
   },
   "sequence": { "mirrorActors": false, "actorMargin": 40, "messageMargin": 34, "boxMargin": 8 }
