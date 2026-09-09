@@ -46,12 +46,12 @@ vLLM, an approved vendor with a zero-retention agreement) — set `LLM_BASE_URL`
 
 ```
 compose.yaml            shared services + Hindsight + Sourcebot + ingest + gateway
-compose.scopes.yaml     GENERATED per-scope LightRAG / FalkorDB / CodeGraph / indexer services
+compose.scopes.yaml     GENERATED (make gen, gitignored) per-scope LightRAG / FalkorDB / CodeGraph / indexer services
 compose.gpu.yaml        NVIDIA override for Ollama
 config/scopes.yaml      access scopes: groups -> spaces + repos (edit this, then regenerate)
 config/proxy/           example SSO reverse-proxy config
 scripts/gen-scopes.py   regenerates compose.scopes.yaml and quadlet/scope-* from scopes.yaml
-quadlet/                Podman Quadlet units (systemd) — same stack, no compose
+quadlet/                Podman Quadlet units (systemd) — same stack, no compose; scope-* units are generated
 config/postgres/        creates hindsight / lightrag / sourcebot DBs + pgvector
 config/sourcebot/       which repos Sourcebot indexes
 ingest/                 FastAPI service: scheduled + webhook sync into LightRAG
