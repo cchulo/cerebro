@@ -1,0 +1,11 @@
+# NVIDIA GPU override: docker compose -f compose.yaml -f compose.gpu.yaml up -d
+# Requires nvidia-container-toolkit (Docker) or CDI configured (Podman: --device nvidia.com/gpu=all).
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

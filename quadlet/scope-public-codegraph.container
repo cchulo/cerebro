@@ -1,0 +1,18 @@
+[Unit]
+Description=CodeGraphContext MCP for scope public
+Requires=scope-public-falkordb.service
+After=scope-public-falkordb.service
+
+[Container]
+Image=localhost/stack-codegraph-mcp:latest
+ContainerName=codegraph-public
+Network=stack.network
+Volume=stack-repos-public:/workspace:ro
+Volume=stack-cgc-public:/home/cgc/.codegraphcontext
+Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-public FALKORDB_PORT=6379
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

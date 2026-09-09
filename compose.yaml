@@ -1,0 +1,155 @@
+# Agent context stack: memory (Hindsight) + documents (LightRAG) + code (Sourcebot, CodeGraphContext)
+# Works with `docker compose` and `podman compose`. GPU: add -f compose.gpu.yaml.
+#
+#   cp .env.example .env && edit
+#   docker compose up -d postgres ollama && ./scripts/pull-models.sh
+#   docker compose up -d
+#
+# Run with the generated per-scope services:  docker compose -f compose.yaml -f compose.scopes.yaml up -d
+# Agents connect ONLY through the gateway (8090, behind SSO proxy). Direct engine ports are for admins.
+# Ports: gateway 8090 (loopback), Hindsight 8888 / UI 9999, Sourcebot 3000, ingest 8080
+
+name: agent-context-stack
+
+x-ollama-env: &ollama_env
+  OLLAMA_URL: http://ollama:11434
+
+services:
+
+  # ------------------------------------------------------------------ shared
+  postgres:
+    image: docker.io/pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    shm_size: 512m
+
+  ollama:
+    image: docker.io/ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_NUM_PARALLEL: 2
+    # CPU-only by default; see compose.gpu.yaml for NVIDIA.
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  redis:
+    image: docker.io/redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redis:/data
+
+  # ------------------------------------------------------------------ memory
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      ollama: { condition: service_started }
+    shm_size: 1g
+    environment:
+      HINDSIGHT_API_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/hindsight
+      HINDSIGHT_API_LLM_PROVIDER: ollama
+      HINDSIGHT_API_LLM_BASE_URL: http://ollama:11434
+      HINDSIGHT_API_LLM_MODEL: ${LLM_MODEL}
+      HINDSIGHT_API_LLM_API_KEY: ollama          # unused by Ollama but must be non-empty
+      HINDSIGHT_API_WORKER_ID: hindsight-1       # stable id so in-flight tasks survive restarts
+      HINDSIGHT_CP_ACCESS_KEY: ${HINDSIGHT_CP_ACCESS_KEY}
+      HINDSIGHT_CP_DATAPLANE_API_URL: http://localhost:8888
+    ports:
+      - "8888:8888"   # API + MCP (/v1/default/mcp per bank)
+      - "9999:9999"   # control plane UI
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  # ------------------------------------------------------------------ code: search
+  sourcebot:
+    image: ghcr.io/sourcebot-dev/sourcebot:latest
+    restart: unless-stopped
+    user: sourcebot
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    environment:
+      CONFIG_PATH: /data/config.json
+      AUTH_URL: ${SOURCEBOT_AUTH_URL}
+      AUTH_SECRET: ${SOURCEBOT_AUTH_SECRET}
+      SOURCEBOT_ENCRYPTION_KEY: ${SOURCEBOT_ENCRYPTION_KEY}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/sourcebot
+      REDIS_URL: redis://redis:6379
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    volumes:
+      - ./config/sourcebot/config.json:/data/config.json:ro
+      - sourcebot:/data
+    ports:
+      - "3000:3000"   # UI, search API, MCP
+
+  # ------------------------------------------------------------------ ingest (Confluence / Backstage / Git docs -> LightRAG)
+  ingest:
+    build: ./ingest
+    restart: unless-stopped
+    environment:
+      SCOPES_FILE: /config/scopes.yaml
+      LIGHTRAG_URL_TEMPLATE: http://lightrag-{scope}:9621
+      LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
+      CONFLUENCE_URL: ${CONFLUENCE_URL}
+      CONFLUENCE_USER: ${CONFLUENCE_USER}
+      CONFLUENCE_TOKEN: ${CONFLUENCE_TOKEN}
+      BACKSTAGE_URL: ${BACKSTAGE_URL}
+      BACKSTAGE_TOKEN: ${BACKSTAGE_TOKEN}
+      GIT_DOC_GLOBS: ${GIT_DOC_GLOBS}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      INGEST_WEBHOOK_SECRET: ${INGEST_WEBHOOK_SECRET}
+      INGEST_SCHEDULE_CRON: ${INGEST_SCHEDULE_CRON}
+      STATE_DIR: /state
+    volumes:
+      - ingest_state:/state
+      - ./config/scopes.yaml:/config/scopes.yaml:ro
+    ports:
+      - "8080:8080"   # POST /webhook/{confluence|backstage|git}, POST /sync/{source}, GET /health
+
+  # ------------------------------------------------------------------ MCP gateway (the ONLY endpoint agents use)
+  # Enforces scopes per caller. Must sit behind an SSO reverse proxy that sets X-Forwarded-User / X-Forwarded-Groups;
+  # never publish 8090 beyond the proxy. See docs/ACCESS-CONTROL.md.
+  gateway:
+    build: ./mcp/gateway
+    restart: unless-stopped
+    depends_on:
+      hindsight: { condition: service_started }
+      sourcebot: { condition: service_started }
+    environment:
+      SCOPES_FILE: /config/scopes.yaml
+      HINDSIGHT_URL: http://hindsight:8888
+      SOURCEBOT_URL: http://sourcebot:3000
+      SOURCEBOT_API_KEY: ${SOURCEBOT_API_KEY}
+      LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
+      PORT: 8090
+    volumes:
+      - ./config/scopes.yaml:/config/scopes.yaml:ro
+    ports:
+      - "127.0.0.1:8090:8090"   # loopback only: the SSO proxy fronts it
+
+volumes:
+  pgdata:
+  ollama:
+  redis:
+  sourcebot:
+  ingest_state:

@@ -1,0 +1,20 @@
+[Unit]
+Description=Index repos for scope infra
+Requires=scope-infra-falkordb.service
+After=scope-infra-falkordb.service
+
+[Container]
+Image=localhost/stack-codegraph-mcp:latest
+ContainerName=indexer-infra
+Network=stack.network
+Volume=stack-repos-infra:/workspace
+Volume=stack-cgc-infra:/home/cgc/.codegraphcontext
+Volume=%h/agent-context-stack/index/index-repo.sh:/usr/local/bin/index-repo.sh:ro,Z
+EnvironmentFile=%h/agent-context-stack/.env
+Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-infra FALKORDB_PORT=6379
+Environment=GIT_DOC_REPOS=https://github.com/your-org/infra.git
+Entrypoint=/bin/bash
+Exec=/usr/local/bin/index-repo.sh all
+
+[Service]
+Type=oneshot

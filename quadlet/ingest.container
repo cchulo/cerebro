@@ -1,0 +1,19 @@
+[Unit]
+Description=Ingest service (Confluence / Backstage / Git docs -> LightRAG)
+
+[Container]
+# build once: podman build -t localhost/stack-ingest:latest ./ingest
+Image=localhost/stack-ingest:latest
+ContainerName=ingest
+Network=stack.network
+PublishPort=8080:8080
+Volume=ingest_state.volume:/state
+EnvironmentFile=%h/agent-context-stack/.env
+Volume=%h/agent-context-stack/config/scopes.yaml:/config/scopes.yaml:ro,Z
+Environment=SCOPES_FILE=/config/scopes.yaml LIGHTRAG_URL_TEMPLATE=http://lightrag-{scope}:9621 STATE_DIR=/state
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

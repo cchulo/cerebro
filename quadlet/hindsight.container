@@ -1,0 +1,26 @@
+[Unit]
+Description=Hindsight agent memory
+Requires=postgres.service ollama.service
+After=postgres.service ollama.service
+
+[Container]
+Image=ghcr.io/vectorize-io/hindsight:latest
+ContainerName=hindsight
+Network=stack.network
+PublishPort=8888:8888
+PublishPort=9999:9999
+ShmSize=1g
+EnvironmentFile=%h/agent-context-stack/.env
+Environment=HINDSIGHT_API_DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/hindsight
+Environment=HINDSIGHT_API_LLM_PROVIDER=ollama
+Environment=HINDSIGHT_API_LLM_BASE_URL=http://ollama:11434
+Environment=HINDSIGHT_API_LLM_MODEL=${LLM_MODEL}
+Environment=HINDSIGHT_API_LLM_API_KEY=ollama
+Environment=HINDSIGHT_API_WORKER_ID=hindsight-1
+Environment=HINDSIGHT_CP_DATAPLANE_API_URL=http://localhost:8888
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

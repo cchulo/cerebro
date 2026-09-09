@@ -1,0 +1,25 @@
+[Unit]
+Description=Sourcebot code search
+Requires=postgres.service redis.service
+After=postgres.service redis.service
+
+[Container]
+Image=ghcr.io/sourcebot-dev/sourcebot:latest
+ContainerName=sourcebot
+Network=stack.network
+User=sourcebot
+PublishPort=3000:3000
+Volume=%h/agent-context-stack/config/sourcebot/config.json:/data/config.json:ro,Z
+Volume=sourcebot.volume:/data
+EnvironmentFile=%h/agent-context-stack/.env
+Environment=CONFIG_PATH=/data/config.json
+Environment=AUTH_URL=${SOURCEBOT_AUTH_URL}
+Environment=AUTH_SECRET=${SOURCEBOT_AUTH_SECRET}
+Environment=DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/sourcebot
+Environment=REDIS_URL=redis://redis:6379
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

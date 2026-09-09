@@ -1,0 +1,15 @@
+[Unit]
+Description=FalkorDB for scope payments
+
+[Container]
+Image=docker.io/falkordb/falkordb:latest
+ContainerName=falkordb-payments
+Network=stack.network
+Volume=stack-falkordb-payments:/var/lib/falkordb/data
+HealthCmd=redis-cli PING
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

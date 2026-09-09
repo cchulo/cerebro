@@ -1,0 +1,16 @@
+# Example: Caddy + oauth2-proxy in front of the gateway. Any OIDC-capable proxy works
+# (Authelia, Pomerium, Traefik forward-auth) as long as it sets the two identity headers.
+#
+# oauth2-proxy (not shown) runs with:
+#   --provider=oidc --oidc-issuer-url=https://idp.example.com --oidc-groups-claim=groups
+#   --set-xauthrequest=true --pass-user-headers=true --upstream=http://127.0.0.1:8090
+# which sets X-Auth-Request-User / X-Auth-Request-Groups; map them to the gateway's expected names below
+# or set identity.user_header / groups_header in config/scopes.yaml to match.
+
+context.internal {
+    tls internal
+    reverse_proxy /mcp* 127.0.0.1:4180 {          # oauth2-proxy
+        header_up X-Forwarded-User  {http.request.header.X-Auth-Request-User}
+        header_up X-Forwarded-Groups {http.request.header.X-Auth-Request-Groups}
+    }
+}

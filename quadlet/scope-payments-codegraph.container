@@ -1,0 +1,18 @@
+[Unit]
+Description=CodeGraphContext MCP for scope payments
+Requires=scope-payments-falkordb.service
+After=scope-payments-falkordb.service
+
+[Container]
+Image=localhost/stack-codegraph-mcp:latest
+ContainerName=codegraph-payments
+Network=stack.network
+Volume=stack-repos-payments:/workspace:ro
+Volume=stack-cgc-payments:/home/cgc/.codegraphcontext
+Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-payments FALKORDB_PORT=6379
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

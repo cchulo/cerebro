@@ -1,0 +1,15 @@
+[Unit]
+Description=Redis for Sourcebot
+
+[Container]
+Image=docker.io/redis:7-alpine
+ContainerName=redis
+Network=stack.network
+Volume=redis.volume:/data
+Exec=redis-server --save 60 1
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

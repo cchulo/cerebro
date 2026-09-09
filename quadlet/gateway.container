@@ -1,0 +1,20 @@
+[Unit]
+Description=Identity-aware MCP gateway (behind SSO proxy)
+Requires=hindsight.service sourcebot.service
+After=hindsight.service sourcebot.service
+
+[Container]
+# build once: podman build -t localhost/stack-gateway:latest ./mcp/gateway
+Image=localhost/stack-gateway:latest
+ContainerName=gateway
+Network=stack.network
+PublishPort=127.0.0.1:8090:8090
+Volume=%h/agent-context-stack/config/scopes.yaml:/config/scopes.yaml:ro,Z
+EnvironmentFile=%h/agent-context-stack/.env
+Environment=SCOPES_FILE=/config/scopes.yaml HINDSIGHT_URL=http://hindsight:8888 SOURCEBOT_URL=http://sourcebot:3000 PORT=8090
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
