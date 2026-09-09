@@ -1,0 +1,42 @@
+# Test environment on Kubernetes: the full stack (../k8s) + mock Confluence/Backstage + fixture docs.
+#   docker compose -f compose.yaml -f compose.test.yaml build mock-confluence   (image for the mocks)
+#   kubectl apply -k test
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: context-stack
+resources:
+  - ../k8s
+  - k8s-mocks.yaml
+configMapGenerator:
+  - name: mock-fixtures
+    files: [fixtures/confluence.yaml, fixtures/backstage.yaml]
+  - name: test-docs-public
+    files: [docs/public/architecture-overview.md]
+  - name: test-docs-infra
+    files: [docs/infra/oncall.md]
+generatorOptions:
+  disableNameSuffixHash: true
+patches:
+  - target: { kind: Deployment, name: ingest }
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: { name: ingest }
+      spec:
+        template:
+          spec:
+            containers:
+              - name: ingest
+                env:
+                  - { name: CONFLUENCE_URL, value: http://mock-confluence:8000 }
+                  - { name: CONFLUENCE_USER, value: test }
+                  - { name: CONFLUENCE_TOKEN, value: test }
+                  - { name: BACKSTAGE_URL, value: http://mock-backstage:8000 }
+                  - { name: BACKSTAGE_TOKEN, value: "" }
+                volumeMounts:
+                  - { name: docs, mountPath: /data/docs, $patch: delete }
+                  - { name: test-docs-public, mountPath: /data/docs/public, readOnly: true }
+                  - { name: test-docs-infra, mountPath: /data/docs/infra, readOnly: true }
+            volumes:
+              - { name: test-docs-public, configMap: { name: test-docs-public } }
+              - { name: test-docs-infra, configMap: { name: test-docs-infra } }
