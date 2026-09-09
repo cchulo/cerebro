@@ -39,18 +39,44 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 
 ## How agents know when to recall and retain
 
-Three layers, nothing to install on the client:
+**Nothing is installed on the agent.** An MCP client learns everything from the server at connect time, in three
+layers, from softest to hardest:
 
-1. **Server instructions.** The gateway sends an `instructions` text at connect time (MCP `initialize`); Claude Code
-   and Cursor put it in the model's context. It carries the routing between docs / code / graph and the
-   "recall at the start, retain at the end" rule. See `INSTRUCTIONS` in `mcp/gateway/gateway/server.py`.
-2. **Tool descriptions.** Each tool's docstring says when to use it.
-3. **Prompts as commands.** The server exposes two MCP prompts; Claude Code shows them as slash commands:
-   `/mcp__context__start_task <task>` (recall + look things up) and `/mcp__context__wrap_up` (retain the outcome).
-   To make retaining automatic, wire `wrap_up` into a Claude Code `Stop` hook in the team's settings.
+| Layer | Mechanism | What it guarantees |
+|---|---|---|
+| 1. Server instructions | The gateway returns an `instructions` text in the MCP `initialize` response (`INSTRUCTIONS` in `mcp/gateway/gateway/server.py`). Claude Code, Cursor and most clients put it in the model's context. It carries the routing (docs / code / graph) and the rule "recall at the start of a task, retain at the end". | The model has read the rule. It usually follows it. |
+| 2. Tool descriptions | Every tool's docstring says when to use it; `retain`'s says what to store and what never to store. | Same as above, at the moment of choosing a tool. |
+| 3. Prompts as commands | The gateway exposes two MCP prompts. Claude Code lists them as slash commands: `/mcp__context__start_task <task>` (recall, then look things up) and `/mcp__context__wrap_up` (retain the outcome). Other clients show them in their prompt picker. | Deterministic when a person runs it. |
 
-A model can still skip `retain` on its own; only the hook makes it deterministic. The rule below is optional
-reinforcement for teams that keep a `CLAUDE.md`.
+The honest limit: with layers 1–3 alone a model can still finish a task without calling `retain`. If you need it
+every time, make the **client** enforce it. Claude Code example, a `Stop` hook that refuses to end the session until
+the agent has retained (team `.claude/settings.json`):
+
+```json
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "python3 .claude/hooks/require-retain.py" }] }]
+  }
+}
+```
+
+```python
+#!/usr/bin/env python3
+# .claude/hooks/require-retain.py — block the first stop of a session until `retain` has been called.
+import json, sys
+event = json.load(sys.stdin)
+if event.get("stop_hook_active"):          # we already blocked once; let it stop now
+    sys.exit(0)
+transcript = open(event["transcript_path"]).read()
+if "mcp__context__retain" in transcript:  # the tool was used at least once this session
+    sys.exit(0)
+print(json.dumps({"decision": "block",
+                  "reason": "Before finishing: call the context server's `retain` with one or two sentences on what "
+                            "changed, decisions made, and anything the docs got wrong (see /mcp__context__wrap_up)."}))
+```
+
+Cursor and other clients have their own hook/rules mechanisms; the routing rule below is the portable fallback.
+The name `context` in the slash commands is whatever you called the server when adding it (`claude mcp add ... context`).
 
 ## Routing rule for `CLAUDE.md` / `.cursor/rules`
 

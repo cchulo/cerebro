@@ -144,7 +144,9 @@ Then, in this order:
    processed, `make smoke ARGS=--live`.
 5. **Put the SSO proxy in front** of `127.0.0.1:8090` (section 3, proxy). Every published port is bound to
    loopback; nothing else should be reachable from the network.
-6. **Connect agents**: one URL per developer, see [CONNECT.md](CONNECT.md).
+6. **Connect agents**: one URL per developer, see [CONNECT.md](CONNECT.md). Agents learn the routing and the
+   recall-first / retain-last rule from the server itself (MCP instructions + prompts); CONNECT.md explains the
+   limits and how to enforce `retain` with a client hook.
 
 No Confluence or Backstage to test with yet? `make test-env` adds mock services that serve `test/fixtures` and
 mounts `test/docs`; the shipped `scopes.yaml` already targets them, so steps 2–4 work unchanged.

@@ -112,7 +112,9 @@ Host or external models: set `LLM_BASE_URL` etc. in `config/stack.env` (pods on 
 ## Wiring agents (Claude Code, Cursor, ...)
 
 One URL per developer, behind SSO: `https://context.internal/mcp` → the gateway. See
-**[docs/CONNECT.md](docs/CONNECT.md)**. Engine ports (8888, 3000, per-scope 9621/8045) are admin-only.
+**[docs/CONNECT.md](docs/CONNECT.md)**, including *how agents know when to recall and retain* (server
+instructions + prompts, nothing installed on the client; a Stop-hook example if it must be enforced).
+Engine ports (8888, 3000, per-scope 9621/8045) are admin-only.
 
 ## Keeping it fresh
 
