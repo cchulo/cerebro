@@ -13,13 +13,20 @@ services:
       CONFLUENCE_URL: http://mock-confluence:8000
       CONFLUENCE_USERNAME: test
       CONFLUENCE_API_TOKEN: test
+  mock-jama:                           # Jama Connect REST v1 subset (plugins/jama.py)
+    build: ../test/mock
+    environment: { MOCK: jama }
+    volumes: ["../test/fixtures:/fixtures:ro"]
   mock-backstage:
     build: ../test/mock
     environment: { MOCK: backstage }
     volumes: ["../test/fixtures:/fixtures:ro"]
   ingest:
-    depends_on: [mock-confluence, mock-backstage]
+    depends_on: [mock-confluence, mock-backstage, mock-jama]
     environment:
+      JAMA_URL: http://mock-jama:8000
+      JAMA_USER: test
+      JAMA_TOKEN: test
       CONFLUENCE_URL: http://mock-confluence:8000
       CONFLUENCE_USER: test
       CONFLUENCE_TOKEN: test

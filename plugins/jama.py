@@ -1,4 +1,4 @@
-"""Jama Connect adapter (requirements / test cases / any item type) - a complete plugin example.
+"""Jama Connect adapter (requirements / test cases / any item type) - a complete plugin example, tested against test/mock (MODE=jama).
 
 Written against the Jama Connect REST API v1 (GET /rest/v1/items?project=<id>&startAt=&maxResults=, GET /rest/v1/abstractitems);
 NOT yet verified against a live Jama instance: run `make source-check SCOPE=<scope> SOURCE=jama` first and adjust

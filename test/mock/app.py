@@ -84,6 +84,29 @@ if MODE == "confluence":
                 return p
         raise HTTPException(404, "page not found")
 
+elif MODE == "jama":
+    # Jama Connect REST v1 subset: GET /rest/v1/items?project=<id>&startAt=&maxResults=  and  GET /rest/v1/items/{id}
+    def _items(project: int):
+        for it in FIX.get("projects", {}).get(project, []):
+            yield {"id": it["id"], "documentKey": it.get("documentKey"), "itemType": it.get("itemType"),
+                   "project": project, "modifiedDate": it.get("modifiedDate"), "fields": it.get("fields", {})}
+
+    @app.get("/rest/v1/items")
+    def items(project: int, startAt: int = 0, maxResults: int = 20):
+        maxResults = min(maxResults, 50)                       # Jama caps page size at 50
+        all_items = list(_items(project))
+        page = all_items[startAt:startAt + maxResults]
+        return {"meta": {"status": "OK", "pageInfo": {"startIndex": startAt, "resultCount": len(page), "totalResults": len(all_items)}},
+                "links": {}, "data": page}
+
+    @app.get("/rest/v1/items/{item_id}")
+    def item(item_id: int):
+        for project in FIX.get("projects", {}):
+            for it in _items(project):
+                if it["id"] == item_id:
+                    return {"meta": {"status": "OK"}, "data": it}
+        raise HTTPException(404, "item not found")
+
 else:
     @app.get("/api/catalog/entities")
     def entities(filter: str = Query(default="")):

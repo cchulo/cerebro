@@ -9,7 +9,7 @@ resources:
   - k8s-mocks.yaml
 configMapGenerator:
   - name: mock-fixtures
-    files: [fixtures/confluence.yaml, fixtures/backstage.yaml]
+    files: [fixtures/confluence.yaml, fixtures/backstage.yaml, fixtures/jama.yaml]
   - name: test-docs-public
     files: [docs/public/architecture-overview.md]
   - name: test-docs-infra
@@ -61,6 +61,9 @@ patches:
                   - { name: CONFLUENCE_TOKEN, value: test }
                   - { name: BACKSTAGE_URL, value: http://mock-backstage:8000 }
                   - { name: BACKSTAGE_TOKEN, value: "" }
+                  - { name: JAMA_URL, value: http://mock-jama:8000 }
+                  - { name: JAMA_USER, value: test }
+                  - { name: JAMA_TOKEN, value: test }
                 volumeMounts:
                   - { name: docs, mountPath: /data/docs, $patch: delete }
                   - { name: test-docs-public, mountPath: /data/docs/public, readOnly: true }

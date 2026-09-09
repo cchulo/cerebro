@@ -47,6 +47,7 @@ scopes:
     docs:
       confluence: { spaces: [PAY] }
       git: {}
+      jama: { projects: [42] }         # requirements + test cases of the payments project
 
   infra:
     groups: [sre, platform-leads]
@@ -57,3 +58,4 @@ scopes:
       confluence: { spaces: [OPS] }
       git: {}
       files: { paths: [/data/docs/infra] }
+      jama: { projects: [57] }
