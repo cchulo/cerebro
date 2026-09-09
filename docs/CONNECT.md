@@ -33,7 +33,7 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 |---|---|
 | `list_scopes` | which scopes, repos and memory banks this user can use |
 | `query_docs(query, mode, scopes?)` | Confluence / Backstage / repo docs across the user's scopes (mode mix/local/global/hybrid/naive) |
-| `search_code(query, max_results, regex)` | Zoekt search (`file:`, `lang:`, `sym:`, `-`, `or`), restricted to the user's repos |
+| `search_code(query, max_results, regex)` | Zoekt search (`file:`, `lang:`, `sym:`, `rev:` for indexed branches, `-`, `or`), restricted to the user's repos |
 | `code_graph(scope, tool, arguments)` | read-only CodeGraphContext tools (`find_code`, `analyze_code_relationships`, `execute_cypher_query`, ...) inside one scope |
 | `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group (`budget` low/mid/high) |
 

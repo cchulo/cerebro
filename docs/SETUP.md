@@ -100,6 +100,12 @@ repos and forks excluded. Keep this list and the `repos` in `scopes.yaml` in agr
 file says, the gateway only lets a user search repos of their scopes, and anything indexed here but listed in no
 scope is unreachable through the gateway.
 
+Branches: by default only each repo's default branch (HEAD) is indexed. Add `revisions` to a connection to index
+more, with globs (`"revisions": { "branches": ["main", "release/*"], "tags": ["v2.*.*"] }`; HEAD is always
+included; at most 64 branches and 64 tags per repo). Queries then take a `rev:` filter (`rev:release/2.3 handlePayment`),
+which works through the gateway's `search_code` unchanged. Index size and sync time grow with every branch, so avoid
+`["**"]` on busy repos. This is Sourcebot only: the code graph and the git docs adapter read the default branch.
+
 ### `config/proxy/Caddyfile.example` — the SSO front door
 
 The gateway trusts two headers, `X-Forwarded-User` and `X-Forwarded-Groups`, and refuses requests without them. It

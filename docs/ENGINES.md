@@ -20,7 +20,9 @@ it is good at what a graph cannot do: a string literal, a config key, an error m
 a file in a language the parser does not know, and always with file paths and line numbers. Sourcebot also syncs
 the repositories itself from GitHub/GitLab on a schedule, so it is the one component that always has current code,
 and it has a web UI developers use directly. The gateway exposes it as `search_code`, appends a `repo:` filter for
-the caller's repositories, and drops anything outside that list a second time on the way back.
+the caller's repositories, and drops anything outside that list a second time on the way back. It indexes the
+default branch unless a connection lists `revisions` (branches/tags, globs, max 64 each); `rev:<branch>` then
+narrows a query. CodeGraphContext and the git docs adapter see only the default branch.
 
 **CodeGraphContext** parses repositories with tree-sitter into a graph of files, classes and functions with
 call / import / inheritance edges, stores it in FalkorDB and exposes it over MCP. It answers structural questions:
