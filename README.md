@@ -86,6 +86,7 @@ make up EXTRA="-f docker/compose.host-ollama.yaml"   # or plain `make up` to run
 make index                         # first code-graph index, one indexer job per scope
 make sync                          # Confluence / Backstage / repo docs -> LightRAG
 make smoke                         # access-control checks against the gateway
+make down / make nuke              # stop (keep data) / remove containers, volumes and the k8s namespace
 ```
 
 Sourcebot: open http://localhost:3000 once, create an API key (Settings → API keys) and put it in `config/stack.env` as
