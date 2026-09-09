@@ -2,7 +2,7 @@
 """Generate per-scope services from config/scopes.yaml.
 
   scripts/gen-scopes.py compose  > compose.scopes.yaml
-  scripts/gen-scopes.py k8s      # writes k8s/generated/ (per-scope manifests, Secret + ConfigMaps from .env/config)
+  scripts/gen-scopes.py k8s      # writes k8s/generated/ (per-scope manifests, Secret + ConfigMaps from config/)
 
 Per scope: lightrag-<scope> (docs graph), falkordb-<scope> + codegraph-<scope> (code graph), indexer-<scope> (job).
 Service/container names are identical in compose and Kubernetes, so the gateway and ingest need no changes.
@@ -68,8 +68,8 @@ def compose():
           "# Use: docker compose -f compose.yaml -f compose.scopes.yaml up -d")
     print(yaml.safe_dump(out, sort_keys=False, width=120))
 
-# Names the engines expect, derived from the short names in .env. Quadlet passes Environment= values to podman
-# literally (no ${VAR} expansion), so every container reads this generated file instead of .env.
+# Names the engines expect, derived from the short names in config/stack.env. Kubernetes has no ${VAR} interpolation
+# for Secrets, so the generator materialises them into the stack-env Secret.
 DERIVED_ENV = {
     "LLM_BINDING": "{LLM_PROVIDER}", "LLM_BINDING_HOST": "{LLM_BASE_URL}", "LLM_BINDING_API_KEY": "{LLM_API_KEY}",
     "EMBEDDING_BINDING": "{EMBED_PROVIDER}", "EMBEDDING_BINDING_HOST": "{EMBED_BASE_URL}",
@@ -87,8 +87,8 @@ DERIVED_ENV = {
 }
 
 def load_env() -> dict | None:
-    """Base .env plus the derived engine-specific names (DERIVED_ENV). None when .env does not exist."""
-    src = pathlib.Path(__file__).parent.parent / ".env"
+    """config/stack.env plus the derived engine-specific names (DERIVED_ENV). None when the file does not exist."""
+    src = pathlib.Path(__file__).parent.parent / "config/stack.env"
     if not src.exists():
         return None
     base = {}
@@ -106,7 +106,7 @@ def load_env() -> dict | None:
 
 
 def k8s():
-    """k8s/generated/: per-scope manifests + kustomization with Secret (from .env) and ConfigMaps (from config/)."""
+    """k8s/generated/: per-scope manifests + kustomization with Secret (from config/stack.env) and ConfigMaps (from config/)."""
     root = pathlib.Path(__file__).parent.parent
     out = root / "k8s/generated"
     out.mkdir(parents=True, exist_ok=True)
@@ -114,7 +114,7 @@ def k8s():
         f.unlink()
     env = load_env()
     if env is None:
-        sys.exit("error: .env not found (copy .env.example to .env first)")
+        sys.exit("error: config/stack.env not found (copy config/stack.env.example first)")
     (out / "stack-env.env").write_text("".join(f"{k}={v}\n" for k, v in env.items()))
     (out / "stack-env.env").chmod(0o600)
     for name, src in {"scopes.yaml": "config/scopes.yaml", "config.json": "config/sourcebot/config.json",

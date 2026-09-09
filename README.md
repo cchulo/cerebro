@@ -18,7 +18,7 @@ is an isolated docs graph and code graph; the gateway only queries the scopes th
 
 ## What the model sees (and where data can leave)
 
-Nothing in this stack talks to a cloud service by itself. The **inference backend** configured in `.env` is the
+Nothing in this stack talks to a cloud service by itself. The **inference backend** configured in `config/stack.env` is the
 only place document or memory text is sent for processing:
 
 | Who sends text to the model | What text | When |
@@ -48,10 +48,11 @@ vLLM, an approved vendor with a zero-retention agreement) — set `LLM_BASE_URL`
 compose.yaml            shared services + Hindsight + Sourcebot + ingest + gateway
 compose.scopes.yaml     GENERATED (make gen, gitignored) per-scope LightRAG / FalkorDB / CodeGraph / indexer services
 compose.gpu.yaml        NVIDIA override for Ollama
-config/scopes.yaml      access scopes: groups -> spaces + repos (edit this, then regenerate)
+config/stack.env        secrets + inference backend (copy from config/stack.env.example; gitignored)
+config/scopes.yaml      access scopes: groups -> repos + document sources (edit this, then regenerate)
 config/proxy/           example SSO reverse-proxy config
-scripts/gen-scopes.py   regenerates compose.scopes.yaml and k8s/generated/ from scopes.yaml + .env
-k8s/                    Kubernetes: base/ hand-written, generated/ from .env + config (gitignored)
+scripts/gen-scopes.py   regenerates compose.scopes.yaml and k8s/generated/ from config/
+k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)
 config/postgres/        creates hindsight / lightrag / sourcebot DBs + pgvector
 config/sourcebot/       which repos Sourcebot indexes
 ingest/                 FastAPI service: scheduled + webhook sync into LightRAG
@@ -66,9 +67,12 @@ scripts/pull-models.sh  pulls the Ollama models
 
 ## Quick start (Docker Compose)
 
+Full walkthrough, including what every file in `config/` is for: **[docs/SETUP.md](docs/SETUP.md)**.
+
+
 ```sh
 pip install -r scripts/requirements.txt   # pyyaml + mcp client for the generator and the smoke test
-cp .env.example .env               # edit secrets and the inference backend
+cp config/stack.env.example config/stack.env   # secrets + inference backend (see docs/SETUP.md)
 edit config/scopes.yaml            # groups -> spaces + repos
 make gen                           # writes compose.scopes.yaml and k8s/generated/
 make up EXTRA="-f compose.host-ollama.yaml"   # or plain `make up` to run Ollama in the project (then `make models`)
@@ -77,7 +81,7 @@ make sync                          # Confluence / Backstage / repo docs -> Light
 make smoke                         # access-control checks against the gateway
 ```
 
-Sourcebot: open http://localhost:3000 once, create an API key (Settings → API keys) and put it in `.env` as
+Sourcebot: open http://localhost:3000 once, create an API key (Settings → API keys) and put it in `config/stack.env` as
 `SOURCEBOT_API_KEY`, then `make up` again.
 
 No Confluence/Backstage to test against? `make test-env` starts mock Confluence and Backstage serving
@@ -88,7 +92,7 @@ whenever `scopes.yaml` changes.
 ## Kubernetes (k3s, OrbStack, any cluster)
 
 Same images and service names as compose; scopes become per-scope Deployments/StatefulSets and a nightly indexer
-CronJob. `k8s/base/` is hand-written, `k8s/generated/` is produced from `.env` and `config/` by the generator
+CronJob. `k8s/base/` is hand-written, `k8s/generated/` is produced from `config/` by the generator
 (gitignored: it contains the Secret).
 
 ```sh
@@ -101,7 +105,7 @@ kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public
 kubectl -n context-stack port-forward svc/ingest 8080:8080 &   # then: make sync
 ```
 
-Host or external models: set `LLM_BASE_URL` etc. in `.env` (pods on OrbStack reach the host as
+Host or external models: set `LLM_BASE_URL` etc. in `config/stack.env` (pods on OrbStack reach the host as
 `host.docker.internal`) and `kubectl -n context-stack scale deploy/ollama --replicas=0`. Details in
 [k8s/README.md](k8s/README.md).
 

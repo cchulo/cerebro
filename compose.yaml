@@ -1,9 +1,10 @@
 # Agent context stack: memory (Hindsight) + documents (LightRAG) + code (Sourcebot, CodeGraphContext)
 # Docker Compose is the dev/single-box path; k8s/ is the same stack for k3s/Kubernetes. GPU: add -f compose.gpu.yaml.
 # Inference backend: Ollama in this project (default), Ollama on the host (-f compose.host-ollama.yaml), or an
-# OpenAI-compatible endpoint your organisation controls (LLM_PROVIDER=openai in .env). See README "What the model sees".
+# OpenAI-compatible endpoint your organisation controls (LLM_PROVIDER=openai in config/stack.env). See README "What the model sees".
 #
-#   cp .env.example .env && edit
+#   cp config/stack.env.example config/stack.env && edit
+#   export COMPOSE_ENV_FILES=config/stack.env      (the Makefile does this for you)
 #   docker compose up -d postgres ollama && ./scripts/pull-models.sh
 #   docker compose up -d
 #
