@@ -130,6 +130,8 @@ flowchart LR
 - **Red** is the one outbound dependency. Only LightRAG and Hindsight send text there; Sourcebot and
   CodeGraphContext use no model. Point it at local Ollama or at an endpoint your organisation controls.
 - **Dashed** boxes are read-only sources; nothing is ever written back to them.
+- **Naming**: CodeGraphContext is the product (`cgc`). `codegraph-<scope>` is our container/Service running it,
+  `mcp/codegraph-mcp/` its image, and `code_graph` the gateway tool that proxies it. One thing, three handles.
 
 Colors are set explicitly (dark palette), so the diagrams look the same on GitHub light and dark themes.
 
@@ -162,7 +164,7 @@ sequenceDiagram
     participant H as Hindsight
     participant L as LightRAG (scope)
     participant S as Sourcebot
-    participant C as CodeGraph (scope)
+    participant C as CodeGraphContext (scope)
     participant M as Inference backend
 
     A->>P: MCP over HTTPS (session cookie / token)

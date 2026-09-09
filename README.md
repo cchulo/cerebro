@@ -8,7 +8,7 @@ Self-hosted context stack for AI agents:
 | Memory | [Hindsight](https://github.com/vectorize-io/hindsight) | What happened before: conversations, agent runs, outcomes (banks per user/team) |
 | Documents | [LightRAG](https://github.com/HKUDS/LightRAG), **one instance per scope** | What the docs say: Confluence, Backstage, repo docs, ADRs |
 | Code search | [Sourcebot](https://github.com/sourcebot-dev/sourcebot) | Exact / symbol search across remote repos, repo-filtered per user |
-| Code graph | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) + FalkorDB, **one pair per scope** | Call graph, blast radius |
+| Code graph | [CodeGraphContext](https://github.com/CodeGraphContext/CodeGraphContext) + FalkorDB, **one pair per scope** | Call graph, blast radius (runs as `codegraph-<scope>`, exposed as the `code_graph` tool) |
 | Ingest | `./ingest` (this repo) | Syncs Confluence, Backstage and Git docs into the right scope |
 | Shared | Postgres + pgvector, Ollama, Redis | One DB, one local model endpoint |
 
