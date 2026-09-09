@@ -58,7 +58,7 @@ The single environment file for the whole stack. Compose reads it for variable i
 | Inference backend | `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `EMBED_*`, `HINDSIGHT_EMBED_BASE_URL` | `ollama` (local; URL is the server root) or `openai` (any OpenAI-compatible endpoint your org controls; URL is the `/v1` base). This is the only place document and memory text is sent. |
 | Hindsight | `HINDSIGHT_API_KEY`, `HINDSIGHT_CP_ACCESS_KEY`, `HINDSIGHT_RERANKER` | API key every call must carry (only the gateway has it); UI login key; `local` reranker (one-time model download) or `rrf` (none) |
 | LightRAG | `LIGHTRAG_API_KEY` | shared by all scope instances; only ingest and gateway hold it |
-| Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` | generate the two secrets with `openssl rand -base64 33` / `24`; the API key is created in Sourcebot's UI after first start |
+| Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` (optional) | generate the two secrets with `openssl rand -base64 33` / `24`; the gateway searches anonymously (Sourcebot runs with `FORCE_ENABLE_ANONYMOUS_ACCESS` on its private port), so no key is needed |
 | Ingest + live fallback | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the shipped adapters and for mcp-atlassian; leave a block empty and that adapter reports "not configured" |
 
 Generate real secrets before the first start; every `change-me` value is a placeholder.
@@ -144,21 +144,21 @@ Docker: `EXTRA="-f docker/compose.gpu.yaml"`.
 
 Then, in this order:
 
-1. **Sourcebot API key**: open http://localhost:3000, create the first (owner) account, Settings → API keys, and
-   put the key in `stack.env` as `SOURCEBOT_API_KEY`; `make up` again so the gateway picks it up.
-2. **Code graph**: `make index` runs one indexer job per scope (clone + `cgc index` into that scope's FalkorDB).
-3. **Documents**: `make sync` asks the ingest to run every adapter for every scope. LightRAG processes the
+1. **Code graph**: `make index` runs one indexer job per scope (clone + `cgc index` into that scope's FalkorDB);
+   `scripts/up.sh --index --sync` does this and the next step for you.
+2. **Documents**: `make sync` asks the ingest to run every plugin for every scope. LightRAG processes the
    batch in the background with the model; `docker compose logs -f lightrag-<scope>` shows progress.
-4. **Check isolation**: `make smoke` (identity headers forged directly against the gateway) and, once documents are
+3. **Check isolation**: `make smoke` (identity headers forged directly against the gateway) and, once documents are
    processed, `make smoke ARGS=--live`.
-5. **Put the SSO proxy in front** of `127.0.0.1:8090` (section 3, proxy). Every published port is bound to
-   loopback; nothing else should be reachable from the network.
-6. **Connect agents**: one URL per developer, see [CONNECT.md](CONNECT.md). Agents learn the routing and the
+4. **Put the SSO proxy in front** of `127.0.0.1:8090` (section 3, proxy). Every published port is bound to
+   loopback; nothing else should be reachable from the network. Sourcebot's own UI (port 3000) runs with anonymous
+   access for the gateway's benefit; keep it off the network too.
+5. **Connect agents**: one URL per developer, see [CONNECT.md](CONNECT.md). Agents learn the routing and the
    recall-first / retain-last rule from the server itself (MCP instructions + prompts); CONNECT.md explains the
    limits and how to enforce `retain` with a client hook.
 
 No Confluence or Backstage to test with yet? `make test-env` adds mock services that serve `test/fixtures` and
-mounts `test/docs`; the shipped `scopes.yaml` already targets them, so steps 2–4 work unchanged.
+mounts `test/docs`; the shipped `scopes.yaml` already targets them, so the steps above work unchanged.
 
 Keeping it fresh is a pull model: the ingest runs on `INGEST_SCHEDULE_CRON` (incremental, so hourly is cheap), the
 indexer jobs run on their CronJob schedule and skip repositories whose upstream HEAD has not moved, and Sourcebot
@@ -187,8 +187,6 @@ in-cluster Ollama is `deploy/ollama`; for a host or external backend set the URL
 Then the same order as compose, through port-forwards:
 
 ```sh
-kubectl -n context-stack port-forward svc/sourcebot 3000:3000    # create the API key, put it in stack.env,
-                                                                  # make gen && kubectl apply -k k8s
 kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public-now   # per scope
 kubectl -n context-stack port-forward svc/ingest 8080:8080 &  && make sync
 kubectl -n context-stack port-forward svc/gateway 8090:8090 & && make smoke
@@ -244,8 +242,8 @@ label (other projects, hand-made volumes) is ever touched.
 
 - `gateway` refuses every call with "missing X-Forwarded-User": the request did not come through the proxy (or the
   smoke test URL is wrong). This is by design.
-- `search_code` returns 401: no `SOURCEBOT_API_KEY`, or the key belongs to another Sourcebot instance (keys live in
-  Sourcebot's database, so a fresh deployment needs a new one).
+- `search_code` returns 401: a stale `SOURCEBOT_API_KEY` in `stack.env` (keys live in Sourcebot's database and die
+  with its volume). Leave it empty; the gateway searches anonymously.
 - `query_docs` answers "no context": LightRAG has not finished processing; check `/documents/pipeline_status` via
   `docker compose logs lightrag-<scope>` or `kubectl logs deploy/lightrag-<scope>`.
 - Ingest logs "not configured": that adapter's credentials block in `stack.env` is empty.

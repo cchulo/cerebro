@@ -39,7 +39,6 @@ kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public
                                                                                        # checks upstream and skips unchanged repos
 kubectl -n context-stack port-forward svc/ingest 8080:8080 &  && make sync              # docs -> LightRAG
 kubectl -n context-stack port-forward svc/gateway 8090:8090 & && make smoke             # ACL checks
-kubectl -n context-stack port-forward svc/sourcebot 3000:3000                           # create the API key once
 ```
 
 Changing `config/scopes.yaml`: regenerate and `kubectl apply -k k8s` again; a new scope adds its pods, a removed scope's

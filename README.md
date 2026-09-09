@@ -89,9 +89,6 @@ make smoke                         # access-control checks against the gateway
 make down / make nuke              # stop (keep data) / remove containers, volumes and the k8s namespace
 ```
 
-Sourcebot: open http://localhost:3000 once, create an API key (Settings → API keys) and put it in `config/stack.env` as
-`SOURCEBOT_API_KEY`, then `make up` again.
-
 No Confluence/Backstage to test against? `make test-env` starts mock Confluence and Backstage serving
 `test/fixtures` and mounts `test/docs`; the example `config/scopes.yaml` already points at them and at public
 GitHub repos, so `make sync && make smoke ARGS=--live` proves isolation end to end (on Kubernetes: `kubectl apply -k test`). With an NVIDIA GPU add `EXTRA="-f docker/compose.gpu.yaml"`. Re-run `make gen`
