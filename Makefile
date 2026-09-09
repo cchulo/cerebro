@@ -1,7 +1,16 @@
-.PHONY: up down models index sync logs
-up:      ; docker compose up -d
-down:    ; docker compose down
+# Compose project: shared services (compose.yaml) + generated per-scope services (compose.scopes.yaml).
+# Host Ollama (Apple silicon etc.): make up EXTRA="-f compose.host-ollama.yaml"   NVIDIA: EXTRA="-f compose.gpu.yaml"
+COMPOSE ?= docker compose -f compose.yaml -f compose.scopes.yaml $(EXTRA)
+SCOPES  ?= $(shell python3 -c "import yaml;print(' '.join(yaml.safe_load(open('config/scopes.yaml'))['scopes']))")
+
+.PHONY: gen up down build models index sync smoke logs ps
+gen:     ; python3 scripts/gen-scopes.py compose > compose.scopes.yaml && python3 scripts/gen-scopes.py quadlet
+build:   ; $(COMPOSE) build
+up:      ; $(COMPOSE) up -d
+down:    ; $(COMPOSE) down
+ps:      ; $(COMPOSE) ps
 models:  ; ./scripts/pull-models.sh
-index:   ; docker compose --profile jobs run --rm indexer
-sync:    ; curl -fsS -X POST localhost:8080/sync/all -H "X-Ingest-Secret: $$(grep INGEST_WEBHOOK_SECRET .env | cut -d= -f2)"
-logs:    ; docker compose logs -f --tail=100
+index:   ; for s in $(SCOPES); do $(COMPOSE) --profile jobs run --rm indexer-$$s; done
+sync:    ; curl -fsS -X POST localhost:8080/sync/all -H "X-Ingest-Secret: $$(grep ^INGEST_WEBHOOK_SECRET .env | cut -d= -f2)"
+smoke:   ; python3 scripts/smoke-test.py
+logs:    ; $(COMPOSE) logs -f --tail=100
