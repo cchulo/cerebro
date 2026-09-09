@@ -98,8 +98,9 @@ async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[s
                                    for ref in refs]}
 
     results = await asyncio.gather(*(one(s) for s in targets), return_exceptions=True)
-    results = [r if not isinstance(r, Exception) else {"scope": s, "error": str(r), "indexed_answer": False}
-               for s, r in zip(targets, results)]
+    results = [r if not isinstance(r, Exception) else
+               {"scope": s, "error": f"{type(r).__name__}: {r}".rstrip(": "), "indexed_answer": False}
+               for s, r in zip(targets, results)]          # httpx.ReadTimeout stringifies to "" - keep the type
     out = {"results": results}
     missed = [r["scope"] for r in results if not r.get("indexed_answer")]
     if fallback and missed:
