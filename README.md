@@ -68,7 +68,8 @@ scripts/pull-models.sh  pulls the Ollama models
 ## Quick start (Docker Compose)
 
 Full walkthrough, including what every file in `config/` is for: **[docs/SETUP.md](docs/SETUP.md)**.
-Diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+Diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Why these engines, search vs graph, the CodeGraph name
+collision, memory vs documents, licences: **[docs/ENGINES.md](docs/ENGINES.md)**.
 
 
 ```sh

@@ -37,7 +37,8 @@ index/index-repo.sh       clone + index one or all repos of a scope
 scripts/gen-scopes.py     generator: config -> compose.scopes.yaml, k8s/generated/
 scripts/smoke-test.py     access-control checks against the gateway
 test/                     mock services, fixtures, and a Kubernetes overlay for the test environment
-docs/                     this file, ACCESS-CONTROL.md (the scope model), CONNECT.md (client setup)
+docs/                     this file, ACCESS-CONTROL.md (the scope model), CONNECT.md (client setup),
+                          ENGINES.md (what each engine is for and is not), ARCHITECTURE.md (diagrams)
 ```
 
 ## 3. The `config/` directory
