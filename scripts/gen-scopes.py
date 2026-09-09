@@ -17,9 +17,12 @@ def safe(name):  # LightRAG workspace: a-z A-Z 0-9 _
 LIGHTRAG_ENV = {
     "HOST": "0.0.0.0", "PORT": "9621", "WORKING_DIR": "/app/data/rag_storage", "INPUT_DIR": "/app/data/inputs",
     "LIGHTRAG_API_KEY": "${LIGHTRAG_API_KEY}",
-    "LLM_BINDING": "ollama", "LLM_BINDING_HOST": "${OLLAMA_URL:-http://ollama:11434}", "LLM_MODEL": "${LLM_MODEL}", "OLLAMA_LLM_NUM_CTX": "32768",
-    "EMBEDDING_BINDING": "ollama", "EMBEDDING_BINDING_HOST": "${OLLAMA_URL:-http://ollama:11434}",
+    "LLM_BINDING": "${LLM_PROVIDER:-ollama}", "LLM_BINDING_HOST": "${LLM_BASE_URL:-http://ollama:11434}",
+    "LLM_BINDING_API_KEY": "${LLM_API_KEY:-ollama}", "LLM_MODEL": "${LLM_MODEL}", "OLLAMA_LLM_NUM_CTX": "32768",
+    "EMBEDDING_BINDING": "${EMBED_PROVIDER:-ollama}", "EMBEDDING_BINDING_HOST": "${EMBED_BASE_URL:-http://ollama:11434}",
+    "EMBEDDING_BINDING_API_KEY": "${EMBED_API_KEY:-ollama}",
     "EMBEDDING_MODEL": "${EMBED_MODEL}", "EMBEDDING_DIM": "${EMBED_DIM}",
+    "LLM_TIMEOUT": "600", "MAX_PARALLEL_INSERT": "2", "WHITELIST_PATHS": "/health",
     "LIGHTRAG_KV_STORAGE": "PGKVStorage", "LIGHTRAG_DOC_STATUS_STORAGE": "PGDocStatusStorage",
     "LIGHTRAG_VECTOR_STORAGE": "PGVectorStorage", "LIGHTRAG_GRAPH_STORAGE": "PGTableGraphStorage",
     "POSTGRES_HOST": "postgres", "POSTGRES_PORT": "5432", "POSTGRES_USER": "${POSTGRES_USER}",
@@ -31,14 +34,14 @@ def compose():
     for name, sc in scopes.items():
         ws = safe(name)
         services[f"lightrag-{name}"] = {
-            "image": "ghcr.io/hkuds/lightrag:latest", "restart": "unless-stopped",
-            "depends_on": {"postgres": {"condition": "service_healthy"}, "ollama": {"condition": "service_started"}},
+            "image": "ghcr.io/hkuds/lightrag:v1.5.7", "restart": "unless-stopped",
+            "depends_on": {"postgres": {"condition": "service_healthy"}},
             "environment": {**LIGHTRAG_ENV, "WORKSPACE": f"scope_{ws}"},
             "volumes": [f"lightrag_{ws}:/app/data"],
         }
         volumes[f"lightrag_{ws}"] = None
         services[f"falkordb-{name}"] = {
-            "image": "docker.io/falkordb/falkordb:latest", "restart": "unless-stopped",
+            "image": "docker.io/falkordb/falkordb:v4.20.4", "restart": "unless-stopped",
             "volumes": [f"falkordb_{ws}:/var/lib/falkordb/data"],
             "healthcheck": {"test": ["CMD", "redis-cli", "PING"], "interval": "10s", "timeout": "5s", "retries": 10},
         }
@@ -46,14 +49,14 @@ def compose():
         services[f"codegraph-{name}"] = {
             "build": "./mcp/codegraph-mcp", "restart": "unless-stopped",
             "depends_on": {f"falkordb-{name}": {"condition": "service_healthy"}},
-            "environment": {"DEFAULT_DATABASE": "falkordb", "FALKORDB_HOST": f"falkordb-{name}", "FALKORDB_PORT": "6379"},
+            "environment": {"DEFAULT_DATABASE": "falkordb-remote", "FALKORDB_HOST": f"falkordb-{name}", "FALKORDB_PORT": "6379"},
             "volumes": [f"repos_{ws}:/workspace:ro", f"cgc_{ws}:/home/cgc/.codegraphcontext"],
         }
         volumes[f"repos_{ws}"] = None; volumes[f"cgc_{ws}"] = None
         services[f"indexer-{name}"] = {
             "build": "./mcp/codegraph-mcp", "profiles": ["jobs"],
             "depends_on": {f"falkordb-{name}": {"condition": "service_healthy"}},
-            "environment": {"DEFAULT_DATABASE": "falkordb", "FALKORDB_HOST": f"falkordb-{name}", "FALKORDB_PORT": "6379",
+            "environment": {"DEFAULT_DATABASE": "falkordb-remote", "FALKORDB_HOST": f"falkordb-{name}", "FALKORDB_PORT": "6379",
                             "GIT_DOC_REPOS": ",".join(sc.get("repos", [])), "GITHUB_TOKEN": "${GITHUB_TOKEN}"},
             "volumes": [f"repos_{ws}:/workspace", f"cgc_{ws}:/home/cgc/.codegraphcontext",
                         "./index/index-repo.sh:/usr/local/bin/index-repo.sh:ro"],
@@ -71,21 +74,19 @@ def quadlet():
     for name, sc in scopes.items():
         ws = safe(name)
         env = "\n".join(f"Environment={k}={v}" for k, v in {**LIGHTRAG_ENV, "WORKSPACE": f"scope_{ws}"}.items()
-                        if not v.startswith("${"))
+                        if not v.startswith("${"))   # ${...} values come from stack.env (same names)
         (qd / f"scope-{name}-lightrag.container").write_text(f"""[Unit]
 Description=LightRAG docs graph for scope {name}
 Requires=postgres.service ollama.service
 After=postgres.service ollama.service
 
 [Container]
-Image=ghcr.io/hkuds/lightrag:latest
+Image=ghcr.io/hkuds/lightrag:v1.5.7
 ContainerName=lightrag-{name}
 Network=stack.network
 Volume=stack-lightrag-{ws}:/app/data
-EnvironmentFile=%h/agent-context-stack/.env
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
 {env}
-Environment=LLM_MODEL=${{LLM_MODEL}} EMBEDDING_MODEL=${{EMBED_MODEL}} EMBEDDING_DIM=${{EMBED_DIM}}
-Environment=POSTGRES_USER=${{POSTGRES_USER}} POSTGRES_PASSWORD=${{POSTGRES_PASSWORD}}
 
 [Service]
 Restart=always
@@ -97,7 +98,7 @@ WantedBy=default.target
 Description=FalkorDB for scope {name}
 
 [Container]
-Image=docker.io/falkordb/falkordb:latest
+Image=docker.io/falkordb/falkordb:v4.20.4
 ContainerName=falkordb-{name}
 Network=stack.network
 Volume=stack-falkordb-{ws}:/var/lib/falkordb/data
@@ -120,7 +121,7 @@ ContainerName=codegraph-{name}
 Network=stack.network
 Volume=stack-repos-{ws}:/workspace:ro
 Volume=stack-cgc-{ws}:/home/cgc/.codegraphcontext
-Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-{name} FALKORDB_PORT=6379
+Environment=DEFAULT_DATABASE=falkordb-remote FALKORDB_HOST=falkordb-{name} FALKORDB_PORT=6379
 
 [Service]
 Restart=always
@@ -140,8 +141,8 @@ Network=stack.network
 Volume=stack-repos-{ws}:/workspace
 Volume=stack-cgc-{ws}:/home/cgc/.codegraphcontext
 Volume=%h/agent-context-stack/index/index-repo.sh:/usr/local/bin/index-repo.sh:ro,Z
-EnvironmentFile=%h/agent-context-stack/.env
-Environment=DEFAULT_DATABASE=falkordb FALKORDB_HOST=falkordb-{name} FALKORDB_PORT=6379
+EnvironmentFile=%h/agent-context-stack/quadlet/stack.env
+Environment=DEFAULT_DATABASE=falkordb-remote FALKORDB_HOST=falkordb-{name} FALKORDB_PORT=6379
 Environment=GIT_DOC_REPOS={",".join(sc.get("repos", []))}
 Entrypoint=/bin/bash
 Exec=/usr/local/bin/index-repo.sh all
@@ -159,6 +160,47 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 """)
+    write_stack_env(qd)
     print(f"wrote quadlet units for scopes: {', '.join(scopes)}")
+
+# Names the engines expect, derived from the short names in .env. Quadlet passes Environment= values to podman
+# literally (no ${VAR} expansion), so every container reads this generated file instead of .env.
+DERIVED_ENV = {
+    "LLM_BINDING": "{LLM_PROVIDER}", "LLM_BINDING_HOST": "{LLM_BASE_URL}", "LLM_BINDING_API_KEY": "{LLM_API_KEY}",
+    "EMBEDDING_BINDING": "{EMBED_PROVIDER}", "EMBEDDING_BINDING_HOST": "{EMBED_BASE_URL}",
+    "EMBEDDING_BINDING_API_KEY": "{EMBED_API_KEY}", "EMBEDDING_MODEL": "{EMBED_MODEL}", "EMBEDDING_DIM": "{EMBED_DIM}",
+    "HINDSIGHT_API_DATABASE_URL": "postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres:5432/hindsight",
+    "HINDSIGHT_API_LLM_PROVIDER": "{LLM_PROVIDER}", "HINDSIGHT_API_LLM_BASE_URL": "{LLM_BASE_URL}",
+    "HINDSIGHT_API_LLM_MODEL": "{LLM_MODEL}", "HINDSIGHT_API_LLM_API_KEY": "{LLM_API_KEY}",
+    "HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL": "{HINDSIGHT_EMBED_BASE_URL}",
+    "HINDSIGHT_API_EMBEDDINGS_OPENAI_API_KEY": "{EMBED_API_KEY}",
+    "HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL": "{EMBED_MODEL}", "HINDSIGHT_API_EMBEDDINGS_OPENAI_DIMENSIONS": "{EMBED_DIM}",
+    "HINDSIGHT_API_RERANKER_PROVIDER": "{HINDSIGHT_RERANKER}",
+    "HINDSIGHT_API_TENANT_API_KEY": "{HINDSIGHT_API_KEY}", "HINDSIGHT_CP_DATAPLANE_API_KEY": "{HINDSIGHT_API_KEY}",
+    "DATABASE_URL": "postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres:5432/sourcebot",
+    "AUTH_URL": "{SOURCEBOT_AUTH_URL}", "AUTH_SECRET": "{SOURCEBOT_AUTH_SECRET}",
+}
+
+def write_stack_env(qd: pathlib.Path):
+    src = pathlib.Path(__file__).parent.parent / ".env"
+    if not src.exists():
+        print("warning: .env not found; quadlet/stack.env not written (copy .env.example to .env and re-run)")
+        return
+    base = {}
+    for line in src.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1); base[k.strip()] = v.strip()
+    for k, v in {"LLM_PROVIDER": "ollama", "LLM_BASE_URL": "http://ollama:11434", "LLM_API_KEY": "ollama",
+                 "EMBED_PROVIDER": "ollama", "EMBED_BASE_URL": "http://ollama:11434", "EMBED_API_KEY": "ollama",
+                 "HINDSIGHT_EMBED_BASE_URL": "http://ollama:11434/v1", "HINDSIGHT_RERANKER": "local"}.items():
+        base.setdefault(k, v)
+    class _D(dict):
+        def __missing__(self, k): return ""
+    derived = {k: v.format_map(_D(base)) for k, v in DERIVED_ENV.items()}
+    out = ["# GENERATED by scripts/gen-scopes.py quadlet from .env -- do not edit, do not commit."]
+    out += [f"{k}={v}" for k, v in {**base, **derived}.items()]
+    (qd / "stack.env").write_text("\n".join(out) + "\n")
+    (qd / "stack.env").chmod(0o600)
 
 {"compose": compose, "quadlet": quadlet}[sys.argv[1]]()

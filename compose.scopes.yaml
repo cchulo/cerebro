@@ -2,27 +2,30 @@
 # Use: docker compose -f compose.yaml -f compose.scopes.yaml up -d
 services:
   lightrag-public:
-    image: ghcr.io/hkuds/lightrag:latest
+    image: ghcr.io/hkuds/lightrag:v1.5.7
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       HOST: 0.0.0.0
       PORT: '9621'
       WORKING_DIR: /app/data/rag_storage
       INPUT_DIR: /app/data/inputs
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
-      LLM_BINDING: ollama
-      LLM_BINDING_HOST: http://ollama:11434
+      LLM_BINDING: ${LLM_PROVIDER:-ollama}
+      LLM_BINDING_HOST: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_BINDING_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL}
       OLLAMA_LLM_NUM_CTX: '32768'
-      EMBEDDING_BINDING: ollama
-      EMBEDDING_BINDING_HOST: http://ollama:11434
+      EMBEDDING_BINDING: ${EMBED_PROVIDER:-ollama}
+      EMBEDDING_BINDING_HOST: ${EMBED_BASE_URL:-http://ollama:11434}
+      EMBEDDING_BINDING_API_KEY: ${EMBED_API_KEY:-ollama}
       EMBEDDING_MODEL: ${EMBED_MODEL}
       EMBEDDING_DIM: ${EMBED_DIM}
+      LLM_TIMEOUT: '600'
+      MAX_PARALLEL_INSERT: '2'
+      WHITELIST_PATHS: /health
       LIGHTRAG_KV_STORAGE: PGKVStorage
       LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
       LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
@@ -37,7 +40,7 @@ services:
     volumes:
     - lightrag_public:/app/data
   falkordb-public:
-    image: docker.io/falkordb/falkordb:latest
+    image: docker.io/falkordb/falkordb:v4.20.4
     restart: unless-stopped
     volumes:
     - falkordb_public:/var/lib/falkordb/data
@@ -56,7 +59,7 @@ services:
       falkordb-public:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-public
       FALKORDB_PORT: '6379'
     volumes:
@@ -70,7 +73,7 @@ services:
       falkordb-public:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-public
       FALKORDB_PORT: '6379'
       GIT_DOC_REPOS: https://github.com/your-org/platform-docs.git,https://github.com/your-org/shared-libs.git
@@ -84,27 +87,30 @@ services:
     - /usr/local/bin/index-repo.sh
     - all
   lightrag-payments:
-    image: ghcr.io/hkuds/lightrag:latest
+    image: ghcr.io/hkuds/lightrag:v1.5.7
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       HOST: 0.0.0.0
       PORT: '9621'
       WORKING_DIR: /app/data/rag_storage
       INPUT_DIR: /app/data/inputs
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
-      LLM_BINDING: ollama
-      LLM_BINDING_HOST: http://ollama:11434
+      LLM_BINDING: ${LLM_PROVIDER:-ollama}
+      LLM_BINDING_HOST: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_BINDING_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL}
       OLLAMA_LLM_NUM_CTX: '32768'
-      EMBEDDING_BINDING: ollama
-      EMBEDDING_BINDING_HOST: http://ollama:11434
+      EMBEDDING_BINDING: ${EMBED_PROVIDER:-ollama}
+      EMBEDDING_BINDING_HOST: ${EMBED_BASE_URL:-http://ollama:11434}
+      EMBEDDING_BINDING_API_KEY: ${EMBED_API_KEY:-ollama}
       EMBEDDING_MODEL: ${EMBED_MODEL}
       EMBEDDING_DIM: ${EMBED_DIM}
+      LLM_TIMEOUT: '600'
+      MAX_PARALLEL_INSERT: '2'
+      WHITELIST_PATHS: /health
       LIGHTRAG_KV_STORAGE: PGKVStorage
       LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
       LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
@@ -119,7 +125,7 @@ services:
     volumes:
     - lightrag_payments:/app/data
   falkordb-payments:
-    image: docker.io/falkordb/falkordb:latest
+    image: docker.io/falkordb/falkordb:v4.20.4
     restart: unless-stopped
     volumes:
     - falkordb_payments:/var/lib/falkordb/data
@@ -138,7 +144,7 @@ services:
       falkordb-payments:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-payments
       FALKORDB_PORT: '6379'
     volumes:
@@ -152,7 +158,7 @@ services:
       falkordb-payments:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-payments
       FALKORDB_PORT: '6379'
       GIT_DOC_REPOS: https://github.com/your-org/payments.git,https://github.com/your-org/ledger.git
@@ -166,27 +172,30 @@ services:
     - /usr/local/bin/index-repo.sh
     - all
   lightrag-infra:
-    image: ghcr.io/hkuds/lightrag:latest
+    image: ghcr.io/hkuds/lightrag:v1.5.7
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       HOST: 0.0.0.0
       PORT: '9621'
       WORKING_DIR: /app/data/rag_storage
       INPUT_DIR: /app/data/inputs
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
-      LLM_BINDING: ollama
-      LLM_BINDING_HOST: http://ollama:11434
+      LLM_BINDING: ${LLM_PROVIDER:-ollama}
+      LLM_BINDING_HOST: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_BINDING_API_KEY: ${LLM_API_KEY:-ollama}
       LLM_MODEL: ${LLM_MODEL}
       OLLAMA_LLM_NUM_CTX: '32768'
-      EMBEDDING_BINDING: ollama
-      EMBEDDING_BINDING_HOST: http://ollama:11434
+      EMBEDDING_BINDING: ${EMBED_PROVIDER:-ollama}
+      EMBEDDING_BINDING_HOST: ${EMBED_BASE_URL:-http://ollama:11434}
+      EMBEDDING_BINDING_API_KEY: ${EMBED_API_KEY:-ollama}
       EMBEDDING_MODEL: ${EMBED_MODEL}
       EMBEDDING_DIM: ${EMBED_DIM}
+      LLM_TIMEOUT: '600'
+      MAX_PARALLEL_INSERT: '2'
+      WHITELIST_PATHS: /health
       LIGHTRAG_KV_STORAGE: PGKVStorage
       LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
       LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
@@ -201,7 +210,7 @@ services:
     volumes:
     - lightrag_infra:/app/data
   falkordb-infra:
-    image: docker.io/falkordb/falkordb:latest
+    image: docker.io/falkordb/falkordb:v4.20.4
     restart: unless-stopped
     volumes:
     - falkordb_infra:/var/lib/falkordb/data
@@ -220,7 +229,7 @@ services:
       falkordb-infra:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-infra
       FALKORDB_PORT: '6379'
     volumes:
@@ -234,7 +243,7 @@ services:
       falkordb-infra:
         condition: service_healthy
     environment:
-      DEFAULT_DATABASE: falkordb
+      DEFAULT_DATABASE: falkordb-remote
       FALKORDB_HOST: falkordb-infra
       FALKORDB_PORT: '6379'
       GIT_DOC_REPOS: https://github.com/your-org/infra.git

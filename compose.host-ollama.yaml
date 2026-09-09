@@ -1,9 +1,10 @@
 # Use an Ollama that already runs on the host (Apple silicon / a GPU box outside Docker) instead of the ollama
 # container. Docker Desktop resolves host.docker.internal; on Podman use host.containers.internal.
 #
-#   export OLLAMA_URL=http://host.docker.internal:11434
-#   docker compose -f compose.yaml -f compose.scopes.yaml -f compose.host-ollama.yaml up -d
-#
+# In .env:   LLM_BASE_URL=http://host.docker.internal:11434
+#            EMBED_BASE_URL=http://host.docker.internal:11434
+#            HINDSIGHT_EMBED_BASE_URL=http://host.docker.internal:11434/v1
+# Then:      docker compose -f compose.yaml -f compose.scopes.yaml -f compose.host-ollama.yaml up -d
 # Pull models on the host instead of scripts/pull-models.sh:  ollama pull bge-m3 && ollama pull $LLM_MODEL
 services:
   ollama:
