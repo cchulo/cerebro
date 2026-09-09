@@ -34,11 +34,16 @@ def pipeline_status(scope: str) -> dict:
     r = _c(scope).get("/documents/pipeline_status"); r.raise_for_status()
     return r.json()
 
-def wait_idle(scope: str, timeout: float = IDLE_TIMEOUT, poll: float = 3.0) -> None:
+def wait_idle(scope: str, timeout: float = IDLE_TIMEOUT, poll: float = 3.0, full: bool = True) -> None:
+    """full=True: wait until nothing is processing (required before a delete).
+    full=False: wait only for the short enqueue window, so a listing sees documents inserted moments ago."""
     deadline = time.monotonic() + timeout
     while True:
         st = pipeline_status(scope)
-        if not (st.get("busy") or st.get("destructive_busy") or st.get("scanning") or st.get("pending_enqueues")):
+        blocking = st.get("destructive_busy") or st.get("scanning") or st.get("pending_enqueues")
+        if full:
+            blocking = blocking or st.get("busy")
+        if not blocking:
             return
         if time.monotonic() > deadline:
             raise TimeoutError(f"lightrag-{scope} pipeline still busy after {timeout}s: {st.get('latest_message')}")
@@ -92,10 +97,10 @@ class Batch:
     def flush(self) -> dict:
         deleted = inserted = 0
         if self.deletes:
-            wait_idle(self.scope)                       # documents enqueued moments ago may not be listed yet
+            wait_idle(self.scope, full=False)           # documents enqueued moments ago may not be listed yet
             index = list_documents(self.scope)
             ids = [i for s in self.deletes for i in index.get(s, [])]
-            if ids:
+            if ids:                                     # only a real deletion needs the pipeline fully idle
                 log.info("lightrag-%s: deleting %d documents", self.scope, len(ids))
                 delete_ids(self.scope, ids); deleted = len(ids)
         for i in range(0, len(self.inserts), INSERT_CHUNK):
