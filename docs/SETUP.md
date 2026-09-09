@@ -207,7 +207,22 @@ registration, no rebuild. Secrets from `stack.env`, options from `sources:`/`liv
 scope's `docs:`. `make source-check SCOPE=... SOURCE=...` lists what the ingest part yields without LightRAG.
 Full guide: [PLUGINS.md](PLUGINS.md); the freshness model: [SOURCES.md](SOURCES.md).
 
-## 8. Upgrading and changing things
+## 8. Lifecycle scripts
+
+`scripts/up.sh` and `scripts/down.sh` wrap everything above for both targets; the Makefile targets call them.
+
+| Command | Effect |
+|---|---|
+| `scripts/up.sh` | regenerate, build images, `docker compose up`, wait for every service |
+| `scripts/up.sh --test --host-ollama --index --sync` | test environment with host Ollama, then index every scope's code and sync all sources |
+| `scripts/up.sh --k8s [--test]` | `kubectl apply -k k8s` (or `test`) and wait for pods |
+| `scripts/down.sh` | remove containers and networks, keep data volumes |
+| `scripts/down.sh --volumes` | ... and delete all data (Postgres, LightRAG, FalkorDB, repos, ingest state) |
+| `scripts/down.sh --k8s [--volumes]` | delete the Kubernetes workloads (and PVCs + namespace with `--volumes`) |
+| `scripts/down.sh --all-targets --volumes` (= `make nuke`) | complete teardown of both compose and Kubernetes; images kept |
+| `scripts/down.sh --nuke` | the above plus every built and pulled image |
+
+## 9. Upgrading and changing things
 
 | Change | Do |
 |---|---|
@@ -218,7 +233,7 @@ Full guide: [PLUGINS.md](PLUGINS.md); the freshness model: [SOURCES.md](SOURCES.
 | new scope | add it to `scopes.yaml`, `make gen`, deploy, `make index`, `make sync` — it costs one LightRAG + one FalkorDB/CodeGraphContext pair |
 | removed scope | on Kubernetes also `kubectl -n context-stack delete all,pvc -l scope=<name>` |
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - `gateway` refuses every call with "missing X-Forwarded-User": the request did not come through the proxy (or the
   smoke test URL is wrong). This is by design.
