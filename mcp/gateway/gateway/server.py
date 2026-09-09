@@ -73,9 +73,13 @@ async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[s
                              json={"query": query, "mode": mode, "include_references": True})
             r.raise_for_status()
             body = r.json()
-            return {"scope": scope, "answer": body.get("response"),
+            refs = body.get("references") or []
+            answer = body.get("response") or ""
+            for ref in refs:                               # the answer text cites the encoded ids too
+                answer = answer.replace(ref.get("file_path", ""), _decode_source(ref.get("file_path", "")))
+            return {"scope": scope, "answer": answer,
                     "references": [{"id": ref.get("reference_id"), "source": _decode_source(ref.get("file_path", ""))}
-                                   for ref in body.get("references") or []]}
+                                   for ref in refs]}
 
     results = await asyncio.gather(*(one(s) for s in targets), return_exceptions=True)
     return {"results": [r if not isinstance(r, Exception) else {"scope": s, "error": str(r)}
