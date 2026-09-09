@@ -76,9 +76,34 @@ async def main(url, live):
         check(PRIVATE not in d["query"].split("payments.git")[0] or True, "repo filter present")
 
     if live:
-        print("live queries (engines must be up and indexed)")
+        print("live queries (engines must be up and indexed; markers come from test/fixtures)")
         err, d, t = await call(url, "alice", [], "query_docs", {"query": "What is documented here?", "mode": "naive"})
         check(not err and all("error" not in r for r in d["results"]), f"query_docs public: {t[:120]}")
+
+        # content isolation: the PAY-space settlement page (marker ZEPHYR-7731) must be invisible to alice
+        q = {"query": "When does the daily settlement batch for card payments close? Quote the settlement code.", "mode": "mix"}
+        err, d, t = await call(url, "alice", [], "query_docs", q)
+        srcs = [r["source"] for res in d["results"] for r in res.get("references", [])] if not err else []
+        check(not err and "ZEPHYR-7731" not in t and not any(s.startswith("confluence:payments:") for s in srcs),
+              f"alice cannot see PAY content (refs: {srcs})")
+        err, d, t = await call(url, "bob", [PRIVATE_GROUP], "query_docs", {**q, "scopes": [PRIVATE]})
+        srcs = [r["source"] for res in d["results"] for r in res.get("references", [])] if not err else []
+        check(not err and any(s.startswith("confluence:payments:PAY/") for s in srcs), f"bob sees PAY content (refs: {srcs})")
+        # page-level restriction: RESTRICTED-QX-9911 is on a restricted PAY page -> not even bob
+        err, d, t = await call(url, "bob", [PRIVATE_GROUP], "query_docs",
+                               {"query": "What score threshold holds transactions for manual review? Quote the threshold code.", "mode": "mix"})
+        srcs = [r["source"] for res in d["results"] for r in res.get("references", [])] if not err else []
+        check(not err and "RESTRICTED-QX-9911" not in t and "confluence:payments:PAY/3002" not in srcs,
+              f"restricted page was never indexed (refs: {srcs})")
+
+        # code search isolation: jinja is in the payments scope
+        err, d, t = await call(url, "alice", [], "search_code", {"query": "class Environment lang:python", "max_results": 10})
+        if err:
+            print(f"  skip live search_code: {t[:100]}")
+        else:
+            check(all("pallets/jinja" not in f["repository"] for f in d["files"]), "alice's search never returns jinja")
+            err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "search_code", {"query": "class Environment lang:python", "max_results": 10})
+            check(not err and any("pallets/jinja" in f["repository"] for f in d2["files"]), f"bob's search reaches jinja ({len(d2['files']) if not err else t[:80]} files)")
         err, d, t = await call(url, "alice", [], "retain", {"content": "smoke test: alice ran the smoke test"})
         check(not err, f"retain: {t[:120]}")
         err, d, t = await call(url, "alice", [], "recall", {"query": "smoke test"})
