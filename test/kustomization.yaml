@@ -1,5 +1,5 @@
 # Test environment on Kubernetes: the full stack (../k8s) + mock Confluence/Backstage + fixture docs.
-#   docker compose -f compose.yaml -f compose.test.yaml build mock-confluence   (image for the mocks)
+#   docker compose -f docker/compose.yaml -f docker/compose.test.yaml build mock-confluence   (image for the mocks)
 #   kubectl apply -k test
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization

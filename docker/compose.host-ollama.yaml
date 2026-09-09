@@ -4,7 +4,7 @@
 # In config/stack.env:   LLM_BASE_URL=http://host.docker.internal:11434
 #            EMBED_BASE_URL=http://host.docker.internal:11434
 #            HINDSIGHT_EMBED_BASE_URL=http://host.docker.internal:11434/v1
-# Then:      docker compose -f compose.yaml -f compose.scopes.yaml -f compose.host-ollama.yaml up -d
+# Then:      make up EXTRA="-f docker/compose.host-ollama.yaml"
 # Pull models on the host instead of scripts/pull-models.sh:  ollama pull bge-m3 && ollama pull $LLM_MODEL
 services:
   ollama:

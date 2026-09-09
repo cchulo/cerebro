@@ -1,4 +1,4 @@
-# NVIDIA GPU override: docker compose -f compose.yaml -f compose.gpu.yaml up -d
+# NVIDIA GPU override: make up EXTRA="-f docker/compose.gpu.yaml"
 # Requires nvidia-container-toolkit. On Kubernetes use the NVIDIA device plugin (see k8s/base/ollama.yaml).
 services:
   ollama:

@@ -21,7 +21,7 @@ jobs:
         run: |
           # SCOPE = the scope this repo is listed under in config/scopes.yaml
           # Compose host:
-          docker compose -f /opt/agent-context-stack/compose.yaml -f /opt/agent-context-stack/compose.scopes.yaml \
+          docker compose -f /opt/agent-context-stack/docker/compose.yaml -f /opt/agent-context-stack/docker/compose.scopes.yaml \
             --profile jobs run --rm "indexer-${{ vars.SCOPE }}" "${{ github.server_url }}/${{ github.repository }}.git"
           # Kubernetes instead (runner has kubectl access to the cluster):
           # kubectl -n context-stack create job --from=cronjob/indexer-${{ vars.SCOPE }} "reindex-$GITHUB_RUN_ID"

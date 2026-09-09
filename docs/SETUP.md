@@ -23,18 +23,16 @@ in the [README](../README.md).
 ## 2. Repository layout
 
 ```
-compose.yaml              shared services + Hindsight + Sourcebot + ingest + gateway
-compose.scopes.yaml       GENERATED per-scope services (make gen) — gitignored
-compose.host-ollama.yaml  override: use an Ollama already running on the host
-compose.gpu.yaml          override: NVIDIA GPU for the Ollama container
-compose.test.yaml         override: mock Confluence + Backstage and fixture docs (no real systems needed)
+docker/                   Compose files: compose.yaml (shared services), compose.scopes.yaml (GENERATED, gitignored),
+                          compose.host-ollama.yaml, compose.gpu.yaml, compose.test.yaml (overrides). Paths inside are
+                          relative to docker/; the Makefile passes the right -f flags
 config/                   everything you edit — see section 3
 k8s/                      Kubernetes manifests: base/ hand-written, generated/ (make gen) — see section 6
 mcp/gateway/              the identity-aware MCP gateway (Python, FastMCP)
 mcp/codegraph-mcp/        CodeGraphContext image with an HTTP MCP bridge; also runs the indexer job
 ingest/                   the ingest service and its source adapters
 index/index-repo.sh       clone + index one or all repos of a scope
-scripts/gen-scopes.py     generator: config -> compose.scopes.yaml, k8s/generated/
+scripts/gen-scopes.py     generator: config -> docker/compose.scopes.yaml, k8s/generated/
 scripts/smoke-test.py     access-control checks against the gateway
 test/                     mock services, fixtures, and a Kubernetes overlay for the test environment
 docs/                     this file, ACCESS-CONTROL.md (the scope model), CONNECT.md (client setup),
@@ -130,15 +128,15 @@ git clone <repo> && cd <repo>
 pip install -r scripts/requirements.txt
 cp config/stack.env.example config/stack.env      # then edit: secrets, inference backend, adapter credentials
 edit config/scopes.yaml config/sourcebot/config.json
-make gen                                          # compose.scopes.yaml + k8s/generated/
+make gen                                          # docker/compose.scopes.yaml + k8s/generated/
 make up                                           # everything, Ollama included
 make models                                       # pulls LLM_MODEL and EMBED_MODEL into the Ollama container
 ```
 
 Ollama already on the host (Apple silicon, a GPU workstation): set `LLM_BASE_URL`, `EMBED_BASE_URL` and
 `HINDSIGHT_EMBED_BASE_URL` to `http://host.docker.internal:11434` (`.../v1` for the last one) in `stack.env`, pull
-the models with `ollama pull` on the host, and use `make up EXTRA="-f compose.host-ollama.yaml"`. NVIDIA inside
-Docker: `EXTRA="-f compose.gpu.yaml"`.
+the models with `ollama pull` on the host, and use `make up EXTRA="-f docker/compose.host-ollama.yaml"`. NVIDIA inside
+Docker: `EXTRA="-f docker/compose.gpu.yaml"`.
 
 Then, in this order:
 
@@ -211,7 +209,7 @@ reference implementations.
 | `scopes.yaml` (groups, repos, docs) | `make gen`, then `make up` / `kubectl apply -k k8s`; a moved repo or space needs `make index` and `make sync` again |
 | `stack.env` | `make up` (compose recreates changed containers) / `make gen && kubectl apply -k k8s` |
 | gateway or ingest code | `make build && make up` / `docker compose build` + `kubectl rollout restart deploy/<name>` |
-| engine versions | tags are pinned in `compose.yaml`, `scripts/gen-scopes.py` and `k8s/base/`; bump, re-verify the API notes in the README, redeploy |
+| engine versions | tags are pinned in `docker/compose.yaml`, `scripts/gen-scopes.py` and `k8s/base/`; bump, re-verify the API notes in the README, redeploy |
 | new scope | add it to `scopes.yaml`, `make gen`, deploy, `make index`, `make sync` — it costs one LightRAG + one FalkorDB/CodeGraphContext pair |
 | removed scope | on Kubernetes also `kubectl -n context-stack delete all,pvc -l scope=<name>` |
 

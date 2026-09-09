@@ -1,6 +1,6 @@
 # Kubernetes deployment (k3s, OrbStack, or any cluster)
 
-The same stack as `compose.yaml`, with the same service names, so nothing in the gateway or ingest changes.
+The same stack as `docker/compose.yaml`, with the same service names, so nothing in the gateway or ingest changes.
 
 ```
 k8s/kustomization.yaml   root: namespace context-stack, base + generated, image overrides

@@ -4,11 +4,8 @@
 # OpenAI-compatible endpoint your organisation controls (LLM_PROVIDER=openai in config/stack.env). See README "What the model sees".
 #
 #   cp config/stack.env.example config/stack.env && edit
-#   export COMPOSE_ENV_FILES=config/stack.env      (the Makefile does this for you)
-#   docker compose up -d postgres ollama && ./scripts/pull-models.sh
-#   docker compose up -d
-#
-# Run with the generated per-scope services:  docker compose -f compose.yaml -f compose.scopes.yaml up -d
+#   make gen && make up            (Makefile = docker compose -f docker/compose.yaml -f docker/compose.scopes.yaml
+#                                   with COMPOSE_ENV_FILES pointing at config/stack.env; paths here are relative to docker/)
 # Agents connect ONLY through the gateway (8090, behind SSO proxy). Direct engine ports are for admins.
 # All published ports are bound to 127.0.0.1: gateway 8090, Hindsight 8888 / UI 9999, Sourcebot 3000, ingest 8080.
 # Only the SSO proxy (or an admin on the host) reaches them; put the proxy on the same host or on the compose network.
@@ -27,7 +24,7 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -117,14 +114,14 @@ services:
       REDIS_URL: redis://redis:6379
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
-      - ./config/sourcebot/config.json:/config/config.json:ro
+      - ../config/sourcebot/config.json:/config/config.json:ro
       - sourcebot:/data
     ports:
       - "127.0.0.1:3000:3000"   # UI (create the API key here), search API, MCP -- admin only
 
   # ------------------------------------------------------------------ ingest (Confluence / Backstage / Git docs -> LightRAG)
   ingest:
-    build: ./ingest
+    build: ../ingest
     restart: unless-stopped
     environment:
       SCOPES_FILE: /config/scopes.yaml
@@ -142,7 +139,7 @@ services:
       STATE_DIR: /state
     volumes:
       - ingest_state:/state
-      - ./config/scopes.yaml:/config/scopes.yaml:ro
+      - ../config/scopes.yaml:/config/scopes.yaml:ro
     ports:
       - "127.0.0.1:8080:8080"   # POST /webhook/{confluence|backstage|git}, POST /sync/{source}, GET /health
 
@@ -150,7 +147,7 @@ services:
   # Enforces scopes per caller. Must sit behind an SSO reverse proxy that sets X-Forwarded-User / X-Forwarded-Groups;
   # never publish 8090 beyond the proxy. See docs/ACCESS-CONTROL.md.
   gateway:
-    build: ./mcp/gateway
+    build: ../mcp/gateway
     restart: unless-stopped
     depends_on:
       hindsight: { condition: service_started }
@@ -164,7 +161,7 @@ services:
       LIGHTRAG_API_KEY: ${LIGHTRAG_API_KEY}
       PORT: 8090
     volumes:
-      - ./config/scopes.yaml:/config/scopes.yaml:ro
+      - ../config/scopes.yaml:/config/scopes.yaml:ro
     ports:
       - "127.0.0.1:8090:8090"   # loopback only: the SSO proxy fronts it
 

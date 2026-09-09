@@ -45,13 +45,13 @@ vLLM, an approved vendor with a zero-retention agreement) — set `LLM_BASE_URL`
 ## Layout
 
 ```
-compose.yaml            shared services + Hindsight + Sourcebot + ingest + gateway
-compose.scopes.yaml     GENERATED (make gen, gitignored) per-scope LightRAG / FalkorDB / CodeGraph / indexer services
-compose.gpu.yaml        NVIDIA override for Ollama
+docker/compose.yaml     shared services + Hindsight + Sourcebot + ingest + gateway
+docker/compose.scopes.yaml  GENERATED (make gen, gitignored) per-scope LightRAG / FalkorDB / CodeGraph / indexer services
+docker/compose.*.yaml   overrides: host Ollama, NVIDIA GPU, test environment
 config/stack.env        secrets + inference backend (copy from config/stack.env.example; gitignored)
 config/scopes.yaml      access scopes: groups -> repos + document sources (edit this, then regenerate)
 config/proxy/           example SSO reverse-proxy config
-scripts/gen-scopes.py   regenerates compose.scopes.yaml and k8s/generated/ from config/
+scripts/gen-scopes.py   regenerates docker/compose.scopes.yaml and k8s/generated/ from config/
 k8s/                    Kubernetes: base/ hand-written, generated/ from config/ (gitignored)
 config/postgres/        creates hindsight / lightrag / sourcebot DBs + pgvector
 config/sourcebot/       which repos Sourcebot indexes
@@ -76,8 +76,8 @@ collision, memory vs documents, licences: **[docs/ENGINES.md](docs/ENGINES.md)**
 pip install -r scripts/requirements.txt   # pyyaml + mcp client for the generator and the smoke test
 cp config/stack.env.example config/stack.env   # secrets + inference backend (see docs/SETUP.md)
 edit config/scopes.yaml            # groups -> spaces + repos
-make gen                           # writes compose.scopes.yaml and k8s/generated/
-make up EXTRA="-f compose.host-ollama.yaml"   # or plain `make up` to run Ollama in the project (then `make models`)
+make gen                           # writes docker/compose.scopes.yaml and k8s/generated/
+make up EXTRA="-f docker/compose.host-ollama.yaml"   # or plain `make up` to run Ollama in the project (then `make models`)
 make index                         # first code-graph index, one indexer job per scope
 make sync                          # Confluence / Backstage / repo docs -> LightRAG
 make smoke                         # access-control checks against the gateway
@@ -88,7 +88,7 @@ Sourcebot: open http://localhost:3000 once, create an API key (Settings → API 
 
 No Confluence/Backstage to test against? `make test-env` starts mock Confluence and Backstage serving
 `test/fixtures` and mounts `test/docs`; the example `config/scopes.yaml` already points at them and at public
-GitHub repos, so `make sync && make smoke ARGS=--live` proves isolation end to end (on Kubernetes: `kubectl apply -k test`). With an NVIDIA GPU add `EXTRA="-f compose.gpu.yaml"`. Re-run `make gen`
+GitHub repos, so `make sync && make smoke ARGS=--live` proves isolation end to end (on Kubernetes: `kubectl apply -k test`). With an NVIDIA GPU add `EXTRA="-f docker/compose.gpu.yaml"`. Re-run `make gen`
 whenever `scopes.yaml` changes.
 
 ## Kubernetes (k3s, OrbStack, any cluster)

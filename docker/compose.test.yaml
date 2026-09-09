@@ -1,17 +1,16 @@
 # Self-contained test environment: mock Confluence + Backstage serving test/fixtures, local files under test/docs,
 # public GitHub repos in config/scopes.yaml. No real Confluence/Backstage/GitHub credentials needed.
 #
-#   docker compose -f compose.yaml -f compose.scopes.yaml [-f compose.host-ollama.yaml] -f compose.test.yaml up -d
-#   make sync && make smoke ARGS=--live
+#   make test-env [EXTRA="-f docker/compose.host-ollama.yaml"]; then: make sync && make smoke ARGS=--live
 services:
   mock-confluence:
-    build: ./test/mock
+    build: ../test/mock
     environment: { MOCK: confluence }
-    volumes: ["./test/fixtures:/fixtures:ro"]
+    volumes: ["../test/fixtures:/fixtures:ro"]
   mock-backstage:
-    build: ./test/mock
+    build: ../test/mock
     environment: { MOCK: backstage }
-    volumes: ["./test/fixtures:/fixtures:ro"]
+    volumes: ["../test/fixtures:/fixtures:ro"]
   ingest:
     depends_on: [mock-confluence, mock-backstage]
     environment:
@@ -20,4 +19,4 @@ services:
       CONFLUENCE_TOKEN: test
       BACKSTAGE_URL: http://mock-backstage:8000
       BACKSTAGE_TOKEN: ""
-    volumes: ["./test/docs:/data/docs:ro"]
+    volumes: ["../test/docs:/data/docs:ro"]
