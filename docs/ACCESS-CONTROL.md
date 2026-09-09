@@ -28,7 +28,10 @@ Rules enforced by the generator and the ingest service:
    restricted, the next sync removes it.
 4. Sourcebot is a single index, but the gateway appends `repo:` filters for the caller's repos to every query
    and additionally drops any result outside the allowlist.
-5. Hindsight: `user-<id>` banks are private; `team-<group>` banks are shared with that IdP group only.
+5. Hindsight: `user-<id>` banks are private; `team-<group>` banks are shared with that IdP group only. Hindsight
+   itself requires an API key on every call (`HINDSIGHT_API_KEY`) that only the gateway holds.
+6. `code_graph` proxies a fixed allowlist of read-only CodeGraphContext tools; indexing, watching, deleting and
+   bundle loading are only reachable from the server-side `indexer-<scope>` job.
 
 ## Identity
 
@@ -57,6 +60,8 @@ internal network. An example oauth2-proxy + Caddy config is in `config/proxy/`.
 
 - [ ] SSO proxy in front of the gateway; direct engine ports firewalled
 - [ ] Every space/repo assigned to one scope; nothing "public" that isn't
-- [ ] Hindsight API auth enabled (tenancy/API keys) so nobody can bypass the gateway
+- [x] Hindsight API auth enabled (`ApiKeyTenantExtension`, key in `.env`) so nobody can bypass the gateway
+- [ ] Inference backend (`LLM_PROVIDER`/`EMBED_PROVIDER`) is local or an org-approved endpoint — see README
 - [ ] Sourcebot API key scoped to a service account; Sourcebot UI behind the same SSO
-- [ ] A test user in *no* group can only see the `public` scope; a user in `payments-team` cannot see `infra`
+- [ ] `make smoke` passes: a user in *no* group sees only `public`, cannot query/search/recall anything else;
+      a user in `payments-team` sees `public` + `payments` and the team bank

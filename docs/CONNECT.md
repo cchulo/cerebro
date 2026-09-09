@@ -32,10 +32,10 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 | Tool | What it does |
 |---|---|
 | `list_scopes` | which scopes, repos and memory banks this user can use |
-| `query_docs(query, mode, scopes?)` | Confluence / Backstage / repo docs across the user's scopes (mode local/global/hybrid) |
-| `search_code(query)` | exact/regex/symbol search, restricted to the user's repos |
-| `code_graph(scope, tool, arguments)` | CodeGraphContext tools (`find_code`, `analyze_code_relationships`, ...) inside one scope |
-| `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group |
+| `query_docs(query, mode, scopes?)` | Confluence / Backstage / repo docs across the user's scopes (mode mix/local/global/hybrid/naive) |
+| `search_code(query, max_results, regex)` | Zoekt search (`file:`, `lang:`, `sym:`, `-`, `or`), restricted to the user's repos |
+| `code_graph(scope, tool, arguments)` | read-only CodeGraphContext tools (`find_code`, `analyze_code_relationships`, `execute_cypher_query`, ...) inside one scope |
+| `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group (`budget` low/mid/high) |
 
 ## Routing rule for `CLAUDE.md` / `.cursor/rules`
 
@@ -50,6 +50,7 @@ Never retain content from restricted documents into a team bank.
 
 ## Verify
 
-Log in as a user in no extra group and as a user in `payments-team`; run `list_scopes` for each and confirm the
-difference. Then: `query_docs` "deploy runbook", `search_code` "TODO", `code_graph public find_code {"query": "main"}`,
-`recall` "what did we do last week".
+`make smoke` runs the access-control checks against the gateway directly (forged identity headers, no proxy).
+Through the proxy: log in as a user in no extra group and as a user in `payments-team`; run `list_scopes` for each and
+confirm the difference. Then: `query_docs` "deploy runbook", `search_code` "TODO",
+`code_graph public find_code {"query": "main"}`, `recall` "what did we do last week".
