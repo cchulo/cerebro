@@ -84,6 +84,31 @@ No LightRAG involved; it only needs the adapter's credentials. When the listing 
 `POST /sync/jama`) ingests it; `GET /sources` on the ingest shows every discovered adapter and whether it is
 configured. Webhooks: `POST /webhook/<name>` with a JSON body that your `documents()` understands as `filter`.
 
+## Freshness: when documents are pulled
+
+Eagerly, never at query time. `query_docs` reads the scope's LightRAG index only; a source system is contacted
+solely by the ingest, on three triggers:
+
+| Trigger | Latency to a fresh answer | Notes |
+|---|---|---|
+| Webhook from the source (`POST /webhook/<adapter>` with a filter) | minutes, dominated by LightRAG's extraction | Confluence Cloud, GitHub/GitLab push, JAMA events can all call it; `INGEST_WEBHOOK_SECRET` guards it |
+| Schedule (`INGEST_SCHEDULE_CRON`, nightly by default) | up to one interval | tighten it for sources without webhooks |
+| Manual (`make sync`, `POST /sync/<adapter>` or `/sync/all`) | immediate | after config changes or re-scoping |
+
+Every run is incremental: adapters yield `(key, version)` per document, the engine re-ingests only changed keys,
+deletes keys that disappeared, and commits `versions.json` after LightRAG accepted the batch. There is no in-place
+update in LightRAG, so a changed document is deleted and inserted again; that and the extraction are what make a
+change take minutes rather than seconds to show up in answers.
+
+Pulling at query time is deliberately not done: it would put a source round-trip plus minutes of LLM extraction in
+front of every answer. If a source must be answered live, that is a different tool (a direct API tool on the
+gateway), not an ingest adapter.
+
+Known cost: listing is only as cheap as the adapter makes it. The Confluence adapter fetches page bodies together
+with versions, so a large space is downloaded on every run even when nothing changed. Adapters for big sources
+should list versions first and fetch text only for changed keys (a two-phase `documents()`); an engine-level hook
+for that is on the list.
+
 ## Rules that keep the model safe
 
 - Never yield source code: code belongs to Sourcebot and CodeGraphContext.
