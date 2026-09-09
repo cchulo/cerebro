@@ -14,13 +14,16 @@ So the access boundary has to be the **index**, not the query.
 `config/scopes.yaml` defines **scopes**. A scope is a permission group with:
 
 - `groups`: IdP groups allowed to read it (`everyone` = any authenticated user)
-- `confluence_spaces`: spaces indexed into it
-- `repos`: repositories indexed into it (docs → LightRAG, code → Sourcebot + CodeGraphContext)
-- `backstage: true`: the org-wide catalog is mirrored into this scope
+- `repos`: repositories indexed into it (code → Sourcebot + CodeGraphContext)
+- `docs`: document sources indexed into it, one entry per adapter (`confluence: {spaces: [...]}`,
+  `backstage: {}`, `git: {}` for docs inside `repos`, `files: {paths: [...]}`, or your own adapter declared under
+  top-level `sources:`) → this scope's LightRAG
 
 Rules enforced by the generator and the ingest service:
 
-1. A space or repo belongs to **exactly one** scope (the generator/ingest refuse duplicates).
+1. A space or repo belongs to **exactly one** scope (the ingest refuses duplicates at startup). An adapter
+   yields only what the whole scope may read; anything with a finer ACL (a restricted page) is skipped, never
+   yielded — that is the adapter's responsibility, see `ingest/ingest/sources/base.py`.
 2. Every scope gets its **own** LightRAG instance (docs graph) and its **own** FalkorDB + CodeGraphContext
    (code graph). Nothing is ever merged across scopes.
 3. Confluence pages with **page-level read restrictions are skipped** (`restricted_pages: skip`). A page

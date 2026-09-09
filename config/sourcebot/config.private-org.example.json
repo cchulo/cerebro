@@ -1,9 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/sourcebot-dev/sourcebot/v5.1.10/schemas/v3/index.json",
   "connections": {
-    "github": {
+    "github-org": {
       "type": "github",
-      "repos": ["pallets/click", "pallets/flask", "pallets/jinja", "pallets/werkzeug"]
+      "token": { "env": "GITHUB_TOKEN" },
+      "orgs": ["your-org"],
+      "exclude": { "archived": true, "forks": true }
     }
   }
 }

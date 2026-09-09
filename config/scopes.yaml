@@ -4,6 +4,8 @@
 #
 # Each scope gets its own LightRAG instance (docs graph) and its own FalkorDB + CodeGraphContext (code graph).
 # Sourcebot stays a single instance; the gateway restricts searches to the repos of the caller's scopes.
+#
+# The values below are a working example: public GitHub repos and the fixture spaces served by compose.test.yaml.
 
 identity:
   user_header: X-Forwarded-User        # set by oauth2-proxy / Authelia / Caddy OIDC
@@ -11,27 +13,36 @@ identity:
   always_groups: [everyone]
   team_banks_from_groups: true         # group "payments-team" -> shared Hindsight bank "team-payments-team"
 
-restricted_pages: skip                 # Confluence pages with read restrictions: skip | own_scope
-                                       # own_scope = index into scope named "restricted-<pageid>" (rarely useful)
+# Document source adapters (ingest/ingest/sources). Built-ins need no declaration: confluence, backstage, git, files.
+# Declare an entry to pass adapter options or to plug in your own class:
+#   jira: { type: "my_adapters.jira:JiraSource", jql: "project = PAY" }
+sources: {}
 
 scopes:
   public:
     groups: [everyone]
-    confluence_spaces: [ENG, DOCS]
-    backstage: true
-    repos:
-      - https://github.com/your-org/platform-docs.git
-      - https://github.com/your-org/shared-libs.git
+    repos:                             # code -> Sourcebot + CodeGraphContext; docs inside them -> `git` adapter
+      - https://github.com/pallets/click.git
+      - https://github.com/pallets/flask.git
+    docs:                              # document sources -> this scope's LightRAG (adapter name -> its config)
+      confluence: { spaces: [ENG, DOCS] }
+      backstage: {}                    # whole catalog (org-wide metadata)
+      git: { globs: [README.md, "docs/**/*.md", "docs/**/*.rst"] }
+      files: { paths: [/data/docs/public] }
 
   payments:
     groups: [payments-team, platform-leads]
-    confluence_spaces: [PAY]
     repos:
-      - https://github.com/your-org/payments.git
-      - https://github.com/your-org/ledger.git
+      - https://github.com/pallets/jinja.git
+    docs:
+      confluence: { spaces: [PAY] }
+      git: {}
 
   infra:
     groups: [sre, platform-leads]
-    confluence_spaces: [OPS]
     repos:
-      - https://github.com/your-org/infra.git
+      - https://github.com/pallets/werkzeug.git
+    docs:
+      confluence: { spaces: [OPS] }
+      git: {}
+      files: { paths: [/data/docs/infra] }
