@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Service
+metadata: { name: sourcebot }
+spec:
+  selector: { app: sourcebot }
+  ports: [{ port: 3000, targetPort: 3000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: sourcebot }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: sourcebot } }
+  template:
+    metadata: { labels: { app: sourcebot } }
+    spec:
+      containers:
+        - name: sourcebot
+          image: ghcr.io/sourcebot-dev/sourcebot:v5.1.10
+          envFrom: [{ secretRef: { name: stack-env } }]   # DATABASE_URL, AUTH_URL, AUTH_SECRET, SOURCEBOT_ENCRYPTION_KEY, GITHUB_TOKEN
+          env:
+            - { name: CONFIG_PATH, value: /config/config.json }
+            - { name: DATA_CACHE_DIR, value: /data }
+            - { name: REDIS_URL, value: redis://redis:6379 }
+            - { name: SOURCEBOT_TELEMETRY_DISABLED, value: "true" }
+            - { name: SOURCEBOT_LIGHTHOUSE_URL, value: http://127.0.0.1:9 }
+          ports: [{ containerPort: 3000 }]
+          volumeMounts:
+            - { name: config, mountPath: /config, readOnly: true }
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: config
+          configMap: { name: sourcebot-config }
+        - name: data
+          persistentVolumeClaim: { claimName: sourcebot-data }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: sourcebot-data }
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 20Gi } } }

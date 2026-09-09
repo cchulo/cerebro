@@ -50,8 +50,8 @@ compose.scopes.yaml     GENERATED (make gen, gitignored) per-scope LightRAG / Fa
 compose.gpu.yaml        NVIDIA override for Ollama
 config/scopes.yaml      access scopes: groups -> spaces + repos (edit this, then regenerate)
 config/proxy/           example SSO reverse-proxy config
-scripts/gen-scopes.py   regenerates compose.scopes.yaml and quadlet/scope-* from scopes.yaml
-quadlet/                Podman Quadlet units (systemd) — same stack, no compose; scope-* units are generated
+scripts/gen-scopes.py   regenerates compose.scopes.yaml and k8s/generated/ from scopes.yaml + .env
+k8s/                    Kubernetes: base/ hand-written, generated/ from .env + config (gitignored)
 config/postgres/        creates hindsight / lightrag / sourcebot DBs + pgvector
 config/sourcebot/       which repos Sourcebot indexes
 ingest/                 FastAPI service: scheduled + webhook sync into LightRAG
@@ -64,13 +64,13 @@ index/index-repo.sh     clone + CodeGraphContext (+ optional SCIP) index for one
 scripts/pull-models.sh  pulls the Ollama models
 ```
 
-## Quick start (Docker / Podman compose)
+## Quick start (Docker Compose)
 
 ```sh
 pip install -r scripts/requirements.txt   # pyyaml + mcp client for the generator and the smoke test
 cp .env.example .env               # edit secrets and the inference backend
 edit config/scopes.yaml            # groups -> spaces + repos
-make gen                           # writes compose.scopes.yaml and quadlet/scope-*
+make gen                           # writes compose.scopes.yaml and k8s/generated/
 make up EXTRA="-f compose.host-ollama.yaml"   # or plain `make up` to run Ollama in the project (then `make models`)
 make index                         # first code-graph index, one indexer job per scope
 make sync                          # Confluence / Backstage / repo docs -> LightRAG
@@ -81,28 +81,25 @@ Sourcebot: open http://localhost:3000 once, create an API key (Settings → API 
 `SOURCEBOT_API_KEY`, then `make up` again. With an NVIDIA GPU add `EXTRA="-f compose.gpu.yaml"`. Re-run `make gen`
 whenever `scopes.yaml` changes.
 
-## Podman Quadlet (rootless systemd)
+## Kubernetes (k3s, OrbStack, any cluster)
+
+Same images and service names as compose; scopes become per-scope Deployments/StatefulSets and a nightly indexer
+CronJob. `k8s/base/` is hand-written, `k8s/generated/` is produced from `.env` and `config/` by the generator
+(gitignored: it contains the Secret).
 
 ```sh
-git clone <this repo> ~/agent-context-stack && cd ~/agent-context-stack
-cp .env.example .env && edit .env
-podman build -t localhost/stack-ingest:latest ./ingest
-podman build -t localhost/stack-gateway:latest ./mcp/gateway
-podman build -t localhost/stack-codegraph-mcp:latest ./mcp/codegraph-mcp
-python3 scripts/gen-scopes.py quadlet      # writes quadlet/scope-* and quadlet/stack.env (derived from .env)
-mkdir -p ~/.config/containers/systemd
-cp quadlet/* ~/.config/containers/systemd/
-systemctl --user daemon-reload
-systemctl --user start postgres ollama
-podman exec ollama ollama pull gpt-oss:20b && podman exec ollama ollama pull bge-m3
-systemctl --user start hindsight sourcebot ingest gateway scope-*-lightrag scope-*-falkordb scope-*-codegraph
-systemctl --user enable --now scope-*-indexer.timer
-loginctl enable-linger $USER          # keep running after logout
+docker compose build                       # gateway, ingest, codegraph images (OrbStack shares them with k8s;
+                                           # elsewhere: docker save | k3s ctr images import, or push to a registry)
+python3 scripts/gen-scopes.py k8s          # k8s/generated/: scope-*.yaml, Secret, ConfigMaps
+kubectl apply -k k8s
+kubectl -n context-stack get pods -w
+kubectl -n context-stack create job --from=cronjob/indexer-public indexer-public-now    # first code-graph index
+kubectl -n context-stack port-forward svc/ingest 8080:8080 &   # then: make sync
 ```
 
-Units reference `%h/agent-context-stack/...` for config files, so keep the checkout at that path or edit the paths.
-Quadlet does not expand `${VAR}` in `Environment=` lines, so all engine-specific variable names are written into
-`quadlet/stack.env` by the generator; re-run it after editing `.env`.
+Host or external models: set `LLM_BASE_URL` etc. in `.env` (pods on OrbStack reach the host as
+`host.docker.internal`) and `kubectl -n context-stack scale deploy/ollama --replicas=0`. Details in
+[k8s/README.md](k8s/README.md).
 
 ## Wiring agents (Claude Code, Cursor, ...)
 

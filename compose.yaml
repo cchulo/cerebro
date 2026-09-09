@@ -1,5 +1,5 @@
 # Agent context stack: memory (Hindsight) + documents (LightRAG) + code (Sourcebot, CodeGraphContext)
-# Works with `docker compose` and `podman compose`. GPU: add -f compose.gpu.yaml.
+# Docker Compose is the dev/single-box path; k8s/ is the same stack for k3s/Kubernetes. GPU: add -f compose.gpu.yaml.
 # Inference backend: Ollama in this project (default), Ollama on the host (-f compose.host-ollama.yaml), or an
 # OpenAI-compatible endpoint your organisation controls (LLM_PROVIDER=openai in .env). See README "What the model sees".
 #

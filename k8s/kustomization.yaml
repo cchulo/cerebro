@@ -1,0 +1,19 @@
+# kubectl apply -k k8s          (after: python3 scripts/gen-scopes.py k8s)
+# base/      hand-written shared services (postgres, redis, ollama, hindsight, sourcebot, ingest, gateway)
+# generated/ per-scope services + Secret/ConfigMaps derived from .env and config/  (gitignored, regenerate)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: context-stack
+resources:
+  - base
+  - generated
+# Locally built images (docker compose build). On OrbStack the Docker image store is shared with Kubernetes;
+# on another k3s: `docker save <image> | sudo k3s ctr images import -` or push to a registry and override here.
+images:
+  - name: agent-context-stack-gateway
+    newTag: latest
+  - name: agent-context-stack-ingest
+    newTag: latest
+  - name: agent-context-stack-codegraph-public
+    newName: agent-context-stack-codegraph-public
+    newTag: latest

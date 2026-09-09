@@ -1,5 +1,5 @@
 # NVIDIA GPU override: docker compose -f compose.yaml -f compose.gpu.yaml up -d
-# Requires nvidia-container-toolkit (Docker) or CDI configured (Podman: --device nvidia.com/gpu=all).
+# Requires nvidia-container-toolkit. On Kubernetes use the NVIDIA device plugin (see k8s/base/ollama.yaml).
 services:
   ollama:
     deploy:

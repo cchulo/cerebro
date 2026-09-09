@@ -1,5 +1,5 @@
 # Use an Ollama that already runs on the host (Apple silicon / a GPU box outside Docker) instead of the ollama
-# container. Docker Desktop resolves host.docker.internal; on Podman use host.containers.internal.
+# container. Docker Desktop and OrbStack resolve host.docker.internal.
 #
 # In .env:   LLM_BASE_URL=http://host.docker.internal:11434
 #            EMBED_BASE_URL=http://host.docker.internal:11434

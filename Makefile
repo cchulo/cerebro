@@ -3,8 +3,8 @@
 COMPOSE ?= docker compose -f compose.yaml -f compose.scopes.yaml $(EXTRA)
 SCOPES  ?= $(shell python3 -c "import yaml;print(' '.join(yaml.safe_load(open('config/scopes.yaml'))['scopes']))")
 
-.PHONY: gen up down build models index sync smoke logs ps test-env
-gen:     ; python3 scripts/gen-scopes.py compose > compose.scopes.yaml && python3 scripts/gen-scopes.py quadlet
+.PHONY: gen up down build models index sync smoke logs ps test-env k8s-apply k8s-status
+gen:     ; python3 scripts/gen-scopes.py compose > compose.scopes.yaml && python3 scripts/gen-scopes.py k8s
 build:   ; $(COMPOSE) build
 up:      ; $(COMPOSE) up -d
 down:    ; $(COMPOSE) down
@@ -16,3 +16,6 @@ smoke:   ; python3 scripts/smoke-test.py $(ARGS)
 logs:    ; $(COMPOSE) logs -f --tail=100
 # mock Confluence/Backstage + fixture docs (see compose.test.yaml); then: make sync && make smoke ARGS=--live
 test-env: ; $(COMPOSE) -f compose.test.yaml up -d --build
+# Kubernetes (k3s / OrbStack): same images, same service names. See k8s/README.md
+k8s-apply:  ; kubectl apply -k k8s
+k8s-status: ; kubectl -n context-stack get pods,pvc

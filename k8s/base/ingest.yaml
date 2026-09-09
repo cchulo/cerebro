@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata: { name: ingest }
+spec:
+  selector: { app: ingest }
+  ports: [{ port: 8080, targetPort: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ingest }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: ingest } }
+  template:
+    metadata: { labels: { app: ingest } }
+    spec:
+      containers:
+        - name: ingest
+          image: agent-context-stack-ingest:latest
+          imagePullPolicy: IfNotPresent
+          envFrom: [{ secretRef: { name: stack-env } }]
+          env:
+            - { name: SCOPES_FILE, value: /config/scopes.yaml }
+            - { name: LIGHTRAG_URL_TEMPLATE, value: "http://lightrag-{scope}:9621" }
+            - { name: STATE_DIR, value: /state }
+          ports: [{ containerPort: 8080 }]
+          volumeMounts:
+            - { name: scopes, mountPath: /config, readOnly: true }
+            - { name: state, mountPath: /state }
+            - { name: docs, mountPath: /data/docs, readOnly: true }   # `files` adapter input
+      volumes:
+        - name: scopes
+          configMap: { name: scopes-config }
+        - name: state
+          persistentVolumeClaim: { claimName: ingest-state }
+        - name: docs
+          emptyDir: {}     # replace with a PVC / hostPath / NFS holding exported documents
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: ingest-state }
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 1Gi } } }

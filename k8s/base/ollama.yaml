@@ -1,0 +1,35 @@
+# In-cluster Ollama. If the models run elsewhere (host Ollama, a GPU box, an org endpoint), set LLM_BASE_URL /
+# EMBED_BASE_URL in .env and scale this to 0:  kubectl -n context-stack scale deploy/ollama --replicas=0
+apiVersion: v1
+kind: Service
+metadata: { name: ollama }
+spec:
+  selector: { app: ollama }
+  ports: [{ port: 11434, targetPort: 11434 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ollama }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: ollama } }
+  template:
+    metadata: { labels: { app: ollama } }
+    spec:
+      containers:
+        - name: ollama
+          image: docker.io/ollama/ollama:0.33.3
+          env:
+            - { name: OLLAMA_KEEP_ALIVE, value: 30m }
+            - { name: OLLAMA_NUM_PARALLEL, value: "2" }
+          ports: [{ containerPort: 11434 }]
+          volumeMounts: [{ name: models, mountPath: /root/.ollama }]
+          # NVIDIA: add  resources: { limits: { nvidia.com/gpu: 1 } }  (needs the NVIDIA device plugin on the node)
+      volumes:
+        - name: models
+          persistentVolumeClaim: { claimName: ollama-models }
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: ollama-models }
+spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 60Gi } } }
