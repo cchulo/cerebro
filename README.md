@@ -68,6 +68,7 @@ scripts/pull-models.sh  pulls the Ollama models
 ## Quick start (Docker Compose)
 
 Full walkthrough, including what every file in `config/` is for: **[docs/SETUP.md](docs/SETUP.md)**.
+Diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 
 ```sh
