@@ -37,6 +37,21 @@ Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the sam
 | `code_graph(scope, tool, arguments)` | read-only CodeGraphContext tools (`find_code`, `analyze_code_relationships`, `execute_cypher_query`, ...) inside one scope |
 | `recall / retain / reflect` | Hindsight, personal bank by default, team banks by group (`budget` low/mid/high) |
 
+## How agents know when to recall and retain
+
+Three layers, nothing to install on the client:
+
+1. **Server instructions.** The gateway sends an `instructions` text at connect time (MCP `initialize`); Claude Code
+   and Cursor put it in the model's context. It carries the routing between docs / code / graph and the
+   "recall at the start, retain at the end" rule. See `INSTRUCTIONS` in `mcp/gateway/gateway/server.py`.
+2. **Tool descriptions.** Each tool's docstring says when to use it.
+3. **Prompts as commands.** The server exposes two MCP prompts; Claude Code shows them as slash commands:
+   `/mcp__context__start_task <task>` (recall + look things up) and `/mcp__context__wrap_up` (retain the outcome).
+   To make retaining automatic, wire `wrap_up` into a Claude Code `Stop` hook in the team's settings.
+
+A model can still skip `retain` on its own; only the hook makes it deterministic. The rule below is optional
+reinforcement for teams that keep a `CLAUDE.md`.
+
 ## Routing rule for `CLAUDE.md` / `.cursor/rules`
 
 ```

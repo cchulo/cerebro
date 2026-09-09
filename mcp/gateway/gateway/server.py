@@ -25,8 +25,19 @@ LIGHTRAG_KEY = os.environ.get("LIGHTRAG_API_KEY", "")
 PORT = int(os.environ.get("PORT", "8090"))
 
 # Stateless + JSON responses: every request carries the proxy's identity headers, nothing is kept per session.
-mcp = FastMCP("agent-context-gateway", host="0.0.0.0", port=PORT, streamable_http_path="/mcp",
-              stateless_http=True, json_response=True)
+# Sent to every client at connect time (MCP `instructions`); Claude Code / Cursor place it in the model's context,
+# so agents learn the routing and the recall-first / retain-last habit without any client-side rules file.
+INSTRUCTIONS = """Organisation context server. Use it before guessing.
+- query_docs: what our documentation, ADRs, runbooks and service catalog say ("how do we", "who owns", "policy").
+- search_code: exact code, symbols, file paths across the repositories you may read.
+- code_graph: callers/callees, blast radius, dead code - structural questions. Call list_scopes first to pick the scope.
+- recall: at the START of a task, look up prior context (what was tried, decisions, corrections).
+- retain: at the END of a task, store the outcome in one or two sentences: what changed, decisions made, anything
+  the docs got wrong. Use the personal bank unless the whole team should know (team bank from list_scopes).
+Never retain content from restricted documents into a team bank. Prefer citing sources returned by query_docs."""
+
+mcp = FastMCP("agent-context-gateway", instructions=INSTRUCTIONS, host="0.0.0.0", port=PORT,
+              streamable_http_path="/mcp", stateless_http=True, json_response=True)
 
 def _caller(ctx: Context) -> acl.Caller:
     return acl.caller_from_headers(ctx.request_context.request.headers)
@@ -210,6 +221,24 @@ async def reflect(ctx: Context, query: str, bank: str | None = None, budget: str
         payload["context"] = context
     res = await _hs("POST", f"/v1/default/banks/{b}/reflect", json=payload)
     return res if res is not None else {"bank": b, "text": None, "note": "bank is empty"}
+
+# ----------------------------------------------------------------------------- prompts
+# MCP prompts show up as slash commands in Claude Code (/mcp__context__start_task, /mcp__context__wrap_up) and as
+# prompt pickers in other clients: a deterministic way to trigger recall / retain, and hookable (Claude Code Stop hook).
+@mcp.prompt()
+def start_task(task: str) -> str:
+    """Begin a task: recall prior context, then plan using docs and code before changing anything."""
+    return (f"I am starting this task: {task}\n\n"
+            "1. Call recall with a short query describing the task (and the team bank if list_scopes shows one).\n"
+            "2. Call query_docs for the relevant runbooks/ADRs/policies and search_code or code_graph for the code.\n"
+            "3. Summarise what you learned and any prior decisions or corrections before proposing changes.")
+
+@mcp.prompt()
+def wrap_up() -> str:
+    """Finish a task: retain the outcome, decisions and anything the docs got wrong."""
+    return ("The task is finished. Call retain once with one or two sentences covering: what changed, decisions made "
+            "and why, anything the documentation got wrong or was missing. Pick the team bank only if the whole team "
+            "should know; never include content from restricted documents. Then confirm what was stored.")
 
 if __name__ == "__main__":
     mcp.run(transport="streamable-http")
