@@ -86,7 +86,8 @@ make up EXTRA="-f docker/compose.host-ollama.yaml"   # or plain `make up` to run
 make index                         # first code-graph index, one indexer job per scope
 make sync                          # Confluence / Backstage / repo docs -> LightRAG
 make smoke                         # access-control checks against the gateway (shows stack activity in green while it runs)
-make status ARGS=--watch           # is it working / is it progressing (documents processed per scope, code graph, health)
+make status                        # is it working / is it progressing (documents processed per scope, code graph, health)
+make watch                         # the same screen, refreshing until Ctrl-C
 make down / make nuke              # stop (keep data) / remove containers, volumes and the k8s namespace
 ```
 

@@ -220,7 +220,8 @@ label (other projects, hand-made volumes) is ever touched.
 |---|---|
 | `scripts/up.sh` | regenerate, build images, `docker compose up`, wait for every service; every phase prints a timestamped line |
 | `scripts/up.sh --sync --wait` | ... then keep showing documents processed per scope until all are done |
-| `scripts/status.sh` / `--watch` / `--k8s` | is it working, is it progressing (section 9) |
+| `scripts/status.sh` / `--k8s` | is it working, is it progressing (section 9) |
+| `scripts/watch.sh` / `--k8s` / `--interval N` | the status screen refreshing every 5 s until Ctrl-C |
 | `scripts/up.sh --test --host-ollama --index --sync` | test environment with host Ollama, then index every scope's code and sync all sources |
 | `scripts/up.sh --k8s [--test]` | `kubectl apply -k k8s` (or `test`) and wait for pods |
 | `scripts/down.sh` | remove containers and networks, keep data volumes |
@@ -236,7 +237,7 @@ that finishes, and nothing prints while it runs. Use these to see progress:
 
 | Docker Compose | Kubernetes |
 |---|---|
-| `make status` (once) / `make status ARGS=--watch` (every 15 s) | `make k8s-status` / `make k8s-status ARGS=--watch` |
+| `make status` (once) / `make watch` (every 5 s until Ctrl-C) | `make k8s-status` / `make k8s-watch` |
 | `scripts/up.sh ... --sync --wait` keeps showing progress after starting | `scripts/up.sh --k8s ... --sync --wait` |
 | `docker compose -f docker/compose.yaml -f docker/compose.scopes.yaml logs -f lightrag-<scope>` | `kubectl -n context-stack logs -f deploy/lightrag-<scope>` |
 | `docker compose ... logs -f ingest` (what was listed and handed over) | `kubectl -n context-stack logs -f deploy/ingest` |

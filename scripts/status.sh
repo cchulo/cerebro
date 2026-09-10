@@ -2,14 +2,19 @@
 # One screen of "is it working / is it progressing", for Docker Compose (default) or Kubernetes (--k8s).
 #
 #   scripts/status.sh            services, per-scope LightRAG processing, code graph, last sync
-#   scripts/status.sh --watch    refresh every 15 s until Ctrl-C
+#   scripts/status.sh --watch    refresh every 5 s until Ctrl-C (scripts/watch.sh, make watch)
 #   scripts/status.sh --k8s      same for the context-stack namespace
+#   --interval N                 seconds between refreshes when watching
 #
 # What "processed" means: LightRAG has finished LLM extraction for that many documents; answers only cover those.
 set -uo pipefail
 cd "$(dirname "$0")/.."
-K8S=0 WATCH=0
-for a in "$@"; do case $a in --k8s) K8S=1;; --watch|-w) WATCH=1;; -h|--help) sed -n 2,9p "$0"; exit 0;; esac; done
+K8S=0 WATCH=0 INTERVAL=5
+while [ $# -gt 0 ]; do
+  case $1 in --k8s) K8S=1;; --watch|-w) WATCH=1;; --interval) INTERVAL=$2; shift;; -h|--help) sed -n 2,10p "$0"; exit 0;; esac
+  shift
+done
+trap 'echo; exit 0' INT
 [ -f config/stack.env ] && export COMPOSE_ENV_FILES="$PWD/config/stack.env"
 FILES=(-f docker/compose.yaml)
 [ -f docker/compose.scopes.yaml ] && FILES+=(-f docker/compose.scopes.yaml)
@@ -74,5 +79,5 @@ while true; do
   [ $WATCH = 1 ] && clear
   if [ $K8S = 1 ]; then k8s_status; else compose_status; fi
   [ $WATCH = 1 ] || break
-  echo; echo "(refreshing every 15 s, Ctrl-C to stop)"; sleep 15
+  echo; echo "(refreshing every ${INTERVAL} s, Ctrl-C to stop)"; sleep "$INTERVAL"
 done
