@@ -39,6 +39,9 @@ LIGHTRAG_ENV = {
     # concurrency is capped per instance so N scopes ingesting cannot starve queries on a shared model endpoint
     "LLM_TIMEOUT": "600", "MAX_ASYNC": "${LIGHTRAG_MAX_ASYNC:-2}", "MAX_PARALLEL_INSERT": "${LIGHTRAG_MAX_PARALLEL_INSERT:-1}",
     "MAX_GLEANING": "${LIGHTRAG_MAX_GLEANING:-0}",    # 0 = one extraction pass per chunk (halves LLM calls); 1 = LightRAG default
+    # hidden reasoning off for every LightRAG call (Ollama binding only): measured 60 s / 6,560 output tokens per chunk with
+    # qwen3.6:35b-mlx thinking vs 7 s / 675 tokens without, same entities. num_predict caps runaway outputs.
+    "OLLAMA_LLM_THINK": "${LIGHTRAG_LLM_THINK:-false}", "OLLAMA_LLM_NUM_PREDICT": "${LIGHTRAG_MAX_OUTPUT_TOKENS:-4096}",
     "WHITELIST_PATHS": "/health",
     "LIGHTRAG_KV_STORAGE": "PGKVStorage", "LIGHTRAG_DOC_STATUS_STORAGE": "PGDocStatusStorage",
     "LIGHTRAG_VECTOR_STORAGE": "PGVectorStorage", "LIGHTRAG_GRAPH_STORAGE": "PGTableGraphStorage",
@@ -111,6 +114,10 @@ DERIVED_ENV = {
     "DATABASE_URL": "postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@postgres:5432/sourcebot",
     "CONFLUENCE_USERNAME": "{CONFLUENCE_USER}", "CONFLUENCE_API_TOKEN": "{CONFLUENCE_TOKEN}",   # mcp-atlassian names
     "AUTH_URL": "{SOURCEBOT_AUTH_URL}", "AUTH_SECRET": "{SOURCEBOT_AUTH_SECRET}",
+    # LightRAG knobs: compose reads the ${LIGHTRAG_*:-default} forms in LIGHTRAG_ENV; Kubernetes gets them from here
+    "MAX_ASYNC": "{LIGHTRAG_MAX_ASYNC}", "MAX_PARALLEL_INSERT": "{LIGHTRAG_MAX_PARALLEL_INSERT}",
+    "MAX_GLEANING": "{LIGHTRAG_MAX_GLEANING}", "OLLAMA_LLM_THINK": "{LIGHTRAG_LLM_THINK}",
+    "OLLAMA_LLM_NUM_PREDICT": "{LIGHTRAG_MAX_OUTPUT_TOKENS}",
 }
 
 def load_env() -> dict | None:
@@ -125,7 +132,9 @@ def load_env() -> dict | None:
             k, v = line.split("=", 1); base[k.strip()] = v.strip()
     for k, v in {"LLM_PROVIDER": "ollama", "LLM_BASE_URL": "http://ollama:11434", "LLM_API_KEY": "ollama",
                  "EMBED_PROVIDER": "ollama", "EMBED_BASE_URL": "http://ollama:11434", "EMBED_API_KEY": "ollama",
-                 "HINDSIGHT_EMBED_BASE_URL": "http://ollama:11434/v1", "HINDSIGHT_RERANKER": "local"}.items():
+                 "HINDSIGHT_EMBED_BASE_URL": "http://ollama:11434/v1", "HINDSIGHT_RERANKER": "local",
+                 "LIGHTRAG_MAX_ASYNC": "2", "LIGHTRAG_MAX_PARALLEL_INSERT": "1", "LIGHTRAG_MAX_GLEANING": "0",
+                 "LIGHTRAG_LLM_THINK": "false", "LIGHTRAG_MAX_OUTPUT_TOKENS": "4096"}.items():
         base.setdefault(k, v)
     class _D(dict):
         def __missing__(self, k): return ""

@@ -266,29 +266,50 @@ unreachable during extraction (section 12).
 ## 11. Performance: what the model endpoint has to do
 
 Nothing in the stack is slow by itself; the cost is LLM calls, and every LightRAG instance and Hindsight share the
-one endpoint in `stack.env`. Measured on an M-series laptop with `qwen3.6:35b-mlx`: 79 tokens/s generation,
-534 tokens/s prompt, so one extraction call is seconds. What makes minutes:
+one endpoint in `stack.env`. Ingest cost is almost entirely **output tokens**: prompt evaluation of a 1,200-token chunk
+takes well under a second, generation runs at 80 tokens/s on an M-series laptop with `qwen3.6:35b-mlx`, so what
+matters is how many tokens the model emits per chunk. Measured with LightRAG 1.5.7's real extraction prompt on one
+1,200-token chunk:
+
+| Setting | Output tokens | Wall time | Entities / relations found |
+|---|---|---|---|
+| model default (hidden reasoning on) | 6,560 (23,000 characters of thinking) | 60 s | 15 / 8 |
+| `LIGHTRAG_LLM_THINK=false` (default here) | 675 | 7 s | 15 / 5 |
+
+Thinking-capable models (qwen3.6, gpt-oss, deepseek-r1) reason at length before every extraction; LightRAG's own
+guidance is "a non-thinking model (reasoning/thinking mode disabled) is strongly recommended to avoid slow, expensive
+extraction". The switch is the Ollama binding's `think` option; for an OpenAI-compatible org endpoint use a model
+served without reasoning, or one whose reasoning effort is set to minimum server-side.
+
+What one operation costs, in LLM calls:
 
 | Work | LLM calls | Notes |
 |---|---|---|
-| Ingesting one document | 1 extraction per ~1200-char chunk (+1 more per chunk with gleaning), plus merge summaries for busy entities | a 5-page runbook ≈ 5–10 calls; 115 doc pages ≈ hours on one local model |
-| `query_docs` (mix/hybrid/local/global) | 1 keyword extraction + 1 answer | ~10–20 s on an idle endpoint; `naive` skips the keyword step |
+| Ingesting one document | 1 extraction per ~1,200-token chunk (+1 more per chunk with gleaning), plus a summary call for an entity merged more than 8 times | a 5-page runbook ≈ 5–10 calls |
+| `query_docs` (mix/hybrid/local/global) | 1 keyword extraction + 1 answer | `naive` skips the keyword step |
 | `retain` | 1 extraction (async, the agent does not wait) + periodic consolidation | |
 | `search_code`, `code_graph`, `live_search` | 0 | |
 
-Queueing is the real enemy: a query waits behind every in-flight extraction call. The knobs, all in `stack.env`:
+Queueing is the other enemy: a query waits behind every in-flight extraction call. The knobs, all in `stack.env`:
 
+- `LIGHTRAG_LLM_THINK=false` (default): no hidden reasoning in LightRAG's calls. Also speeds up `query_docs` answers.
+- `LIGHTRAG_MAX_OUTPUT_TOKENS=4096` (default): output cap per call; stops a chunk that sends the model into a loop.
+- `LIGHTRAG_MAX_GLEANING=0` (default): one extraction pass per chunk instead of two.
 - `OLLAMA_NUM_PARALLEL` (in-stack Ollama; for a host Ollama set it in its environment): requests served concurrently.
 - `LIGHTRAG_MAX_ASYNC` (concurrent LLM calls per instance, default 2 here) and `LIGHTRAG_MAX_PARALLEL_INSERT`
-  (documents processed at once, default 1): with N scopes ingesting, total in-flight calls = N × MAX_ASYNC.
-- `LIGHTRAG_MAX_GLEANING=0` (default here): one extraction pass per chunk instead of two.
+  (documents processed at once, default 1): with N scopes ingesting, total in-flight calls = N × MAX_ASYNC; keep that
+  at or below `OLLAMA_NUM_PARALLEL` or calls queue inside Ollama.
 - The size of what you ingest: `git` globs, Confluence spaces, Jama projects. The example config indexes only
   READMEs from the public repos for this reason; widen it once the endpoint has capacity.
 - An org endpoint with real throughput (`LLM_PROVIDER=openai`) removes the constraint entirely: extraction and
   queries no longer compete for one laptop GPU.
 
-Schedule ingest when nobody is querying (the crons default to 02:00/03:00), and expect the first sync of a large
-space to take hours on a single local model regardless of settings.
+LightRAG caches extraction results per chunk text (`ENABLE_LLM_CACHE_FOR_EXTRACT`, on by default), so re-syncing a
+document whose text did not change costs no LLM calls even though the ingest deletes and re-inserts it.
+
+Schedule ingest when nobody is querying (the crons default to 02:00/03:00). Expect the first sync of a large space to
+take a while on a single local model regardless of settings: 1,000 pages ≈ 1,000–3,000 chunks ≈ 2–6 hours at 7 s each
+with three calls in flight.
 
 ## 12. Troubleshooting
 
