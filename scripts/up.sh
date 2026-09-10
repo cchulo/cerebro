@@ -103,7 +103,7 @@ if [ $SYNC = 1 ]; then
   step "sync all document sources -> per-scope LightRAG (the ingest answers at once; extraction runs in the background)"
   curl -fsS -X POST localhost:8080/sync/all -H "X-Ingest-Secret: $SECRET" | sed 's/^/    /'; echo
   for i in $(seq 1 60); do
-    line=$(dc logs --no-log-prefix --since 10m ingest 2>/dev/null | grep -E "sync all done|Traceback" | tail -1 | cut -c1-140)
+    line=$(dc logs --no-log-prefix --since 10m ingest 2>/dev/null | { grep -E "sync all done|Traceback" || true; } | tail -1 | cut -c1-140)
     [ -n "$line" ] && { note "$line"; break; }
     note "ingest: listing sources and handing documents to LightRAG..."; sleep 5
   done

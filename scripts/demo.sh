@@ -3,7 +3,8 @@
 # local files under test/docs, public GitHub repositories), the whole stack, a connection for Claude Code or Cursor,
 # live activity while you talk to it, and teardown. Walkthrough with the storyline: docs/DEMO.md
 #
-#   scripts/demo.sh up [--k8s]                 create config/stack.env if missing, start everything, index code, sync docs
+#   scripts/demo.sh init                       only create config/stack.env (fresh secrets, host Ollama detected) if missing
+#   scripts/demo.sh up [--k8s]                 init, then start everything, index code, sync docs
 #   scripts/demo.sh ready [--k8s]              has every scope finished ingesting? (exit 0 = yes)
 #   scripts/demo.sh watch [--k8s]              progress screen, refreshing until Ctrl-C
 #   scripts/demo.sh activity [--k8s]           live trail: gateway tool calls (white), what the engines do (green)
@@ -167,9 +168,11 @@ p.write_text(re.sub(r'    # demo-late-page-begin.*?# demo-late-page-end\n', '', 
 
 # ---------------------------------------------------------------------------------------------- commands
 case $CMD in
-  help|-h|--help) sed -n 2,18p "$0"; exit 0;;
+  help|-h|--help) sed -n 2,19p "$0"; exit 0;;
 
   personas) personas;;
+
+  init) bootstrap_env && say "  config/stack.env: $(env_get LLM_PROVIDER) $(env_get LLM_MODEL) via $(env_get LLM_BASE_URL); embeddings $(env_get EMBED_MODEL)";;
 
   up)
     for t in docker openssl curl python3; do command -v $t >/dev/null || { echo "missing: $t" >&2; exit 1; }; done
@@ -179,7 +182,7 @@ case $CMD in
     HO=""; grep -q "host.docker.internal" config/stack.env && HO=--host-ollama
     grep -q "host.docker.internal" config/stack.env && pull_models
     head_ "starting the stack with the test environment (scripts/up.sh --test $HO --index --sync $K)"
-    PYTHON=$PY scripts/up.sh --test $HO --index --sync $K
+    PYTHON=$PY scripts/up.sh --test $HO --index --sync $K || { warn "up.sh failed: see the output above; scripts/demo.sh status $K shows what is running"; exit 1; }
     grep -q "host.docker.internal" config/stack.env || pull_models
     head_ "${Y}NOT READY YET.${N}${B} Documents are being extracted into the per-scope graphs; code is being indexed.${N}"
     say "  Watch until every scope reads  N/N processed [idle]  and the code graph shows every repo indexed:"
@@ -239,5 +242,5 @@ case $CMD in
     [ $VOLUMES = 1 ] && say "  data volumes deleted; config/stack.env and .demo/venv kept (delete them by hand if you want a clean slate)"
     say "  done. 'claude mcp remove context' if you added the server at user scope.";;
 
-  *) echo "unknown command '$CMD'" >&2; sed -n 2,18p "$0"; exit 2;;
+  *) echo "unknown command '$CMD'" >&2; sed -n 2,19p "$0"; exit 2;;
 esac
