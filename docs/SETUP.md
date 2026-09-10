@@ -58,7 +58,7 @@ The single environment file for the whole stack. Compose reads it for variable i
 | Inference backend | `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `EMBED_*`, `HINDSIGHT_EMBED_BASE_URL` | `ollama` (local; URL is the server root) or `openai` (any OpenAI-compatible endpoint your org controls; URL is the `/v1` base). This is the only place document and memory text is sent. |
 | Hindsight | `HINDSIGHT_API_KEY`, `HINDSIGHT_CP_ACCESS_KEY`, `HINDSIGHT_RERANKER` | API key every call must carry (only the gateway has it); UI login key; `local` reranker (one-time model download) or `rrf` (none) |
 | LightRAG | `LIGHTRAG_API_KEY` | shared by all scope instances; only ingest and gateway hold it |
-| Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` (optional) | generate the two secrets with `openssl rand -base64 33` / `24`; the gateway searches anonymously (Sourcebot runs with `FORCE_ENABLE_ANONYMOUS_ACCESS` on its private port), so no key is needed |
+| Sourcebot | `SOURCEBOT_AUTH_SECRET`, `SOURCEBOT_ENCRYPTION_KEY`, `SOURCEBOT_AUTH_URL`, `GITHUB_TOKEN`, `SOURCEBOT_API_KEY` | generate the two secrets with `openssl rand -base64 33` / `24`; the API key is created in Sourcebot's UI after the first start (register the first user, Settings > API Keys), pasted here, then `make up` again. Without it `search_code` returns 401 |
 | Ingest + live fallback | `CONFLUENCE_*`, `BACKSTAGE_*`, `GIT_DOC_GLOBS`, `INGEST_WEBHOOK_SECRET`, `INGEST_SCHEDULE_CRON` | credentials for the shipped adapters and for mcp-atlassian; leave a block empty and that adapter reports "not configured" |
 
 Generate real secrets before the first start; every `change-me` value is a placeholder.
@@ -151,8 +151,8 @@ Then, in this order:
 3. **Check isolation**: `make smoke` (identity headers forged directly against the gateway) and, once documents are
    processed, `make smoke ARGS=--live`.
 4. **Put the SSO proxy in front** of `127.0.0.1:8090` (section 3, proxy). Every published port is bound to
-   loopback; nothing else should be reachable from the network. Sourcebot's own UI (port 3000) runs with anonymous
-   access for the gateway's benefit; keep it off the network too.
+   loopback; nothing else should be reachable from the network. Sourcebot's own UI (port 3000) is where the API key
+   the gateway uses is created (first user registers, Settings > API Keys); keep it off the network too.
 5. **Connect agents**: one URL per developer, see [CONNECT.md](CONNECT.md). Agents learn the routing and the
    recall-first / retain-last rule from the server itself (MCP instructions + prompts); CONNECT.md explains the
    limits and how to enforce `retain` with a client hook.
@@ -264,6 +264,7 @@ unreachable during extraction (section 12).
 | gateway or ingest code | `make build && make up` / `docker compose build` + `kubectl rollout restart deploy/<name>` |
 | engine versions | tags are pinned in `docker/compose.yaml`, `scripts/gen-scopes.py` and `k8s/base/`; bump, re-verify the API notes in the README, redeploy |
 | new scope | add it to `scopes.yaml`, `make gen`, deploy, `make index`, `make sync` — it costs one LightRAG + one FalkorDB/CodeGraphContext pair |
+| Sourcebot volume from before the API-key requirement | the old `FORCE_ENABLE_ANONYMOUS_ACCESS` left "anonymous access" switched on inside Sourcebot's database; turn it off in its UI (Settings > Access) or recreate the volume, then create the key |
 | removed scope | on Kubernetes also `kubectl -n context-stack delete all,pvc -l scope=<name>` |
 
 ## 11. Performance: what the model endpoint has to do
@@ -321,8 +322,9 @@ with three calls in flight.
 
 - `gateway` refuses every call with "missing X-Forwarded-User": the request did not come through the proxy (or the
   smoke test URL is wrong). This is by design.
-- `search_code` returns 401: a stale `SOURCEBOT_API_KEY` in `stack.env` (keys live in Sourcebot's database and die
-  with its volume). Leave it empty; the gateway searches anonymously.
+- `search_code` returns 401: `SOURCEBOT_API_KEY` in `stack.env` is empty or stale (keys live in Sourcebot's database
+  and die with its volume). Open http://127.0.0.1:3000, register or log in, Settings > API Keys, create one, paste it,
+  `make up` (or `scripts/demo.sh up`) to recreate the gateway with it.
 - `query_docs` answers "no context": LightRAG has not finished processing; check `/documents/pipeline_status` via
   `docker compose logs lightrag-<scope>` or `kubectl logs deploy/lightrag-<scope>`.
 - Ingest logs "not configured": that adapter's credentials block in `stack.env` is empty.

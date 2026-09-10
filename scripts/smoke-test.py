@@ -84,7 +84,7 @@ async def main(url, live):
 
     err, d, t = await call(url, "alice", [], "search_code", {"query": "TODO", "max_results": 5})
     if err:
-        say(f"  skip search_code (engine down?): {t[:100]}", DIM)
+        say("  skip search_code: Sourcebot refused the request (SOURCEBOT_API_KEY missing or stale; scripts/demo.sh ready explains)" if "401" in t else f"  skip search_code (engine down?): {t[:100]}", DIM)
     else:
         names = {u.split("/", 3)[-1].removesuffix(".git").lower() for u in private_repos}
         leaked = [f["repository"] for f in d["files"] if any(f["repository"].lower().endswith(n) for n in names)]

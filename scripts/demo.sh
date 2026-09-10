@@ -124,6 +124,20 @@ print(c.get("processed",0), c.get("all",0), "busy" if s.get("busy") else "idle",
   if [ $K8S = 1 ]; then kubectl -n context-stack exec "deploy/lightrag-$1" -- python -c "$code" 2>/dev/null
   else dc exec -T "lightrag-$1" python -c "$code" 2>/dev/null; fi
 }
+sourcebot_key_status() {   # prints ok | missing | rejected | unreachable
+  key=$(env_get SOURCEBOT_API_KEY)
+  [ -n "$key" ] || { echo missing; return; }
+  code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 -X POST http://127.0.0.1:3000/api/search -H "Authorization: Bearer $key" \
+         -H 'Content-Type: application/json' -d '{"query":"README","matches":1}' 2>/dev/null || true)
+  case $code in 200) echo ok;; 401|403) echo rejected;; *) echo unreachable;; esac
+}
+sourcebot_key_howto() {
+  warn "Code search needs a Sourcebot API key, and only Sourcebot's UI can issue one:"
+  say  "    1. open ${B}http://127.0.0.1:3000${N}$([ $K8S = 1 ] && echo '   (first: kubectl -n context-stack port-forward svc/sourcebot 3000:3000)')"
+  say  "    2. register the first user: any email and password, it is a local account and becomes the owner"
+  say  "    3. Settings > API Keys > create, then put it in config/stack.env:   SOURCEBOT_API_KEY=<the key>"
+  say  "    4. run  ${B}scripts/demo.sh up $K${N}  again: the gateway is recreated with the key (ready then shows: sourcebot key ok)"
+}
 ready() {
   ensure_python; compose_files; ok=1
   head_ "document ingestion per scope"
@@ -133,6 +147,18 @@ ready() {
     line="  $s: $1/$2 processed [$3]"; [ "${4:-0}" != 0 ] && line="$line ${4} failed"
     if [ "$2" != 0 ] && [ "$1" = "$2" ] && [ "$3" = idle ]; then say "$line  ${G}ready${N}"; else say "$line"; ok=0; fi
   done
+  if [ $K8S = 0 ]; then
+    case $(sourcebot_key_status) in
+      ok) say "  sourcebot key: ${G}ok${N} (search_code works)";;
+      missing) say "  sourcebot key: ${Y}missing${N}"; sourcebot_key_howto; ok=0;;
+      rejected) say "  sourcebot key: ${Y}rejected${N} (stale: keys die with Sourcebot's volume)"; sourcebot_key_howto; ok=0;;
+      *) say "  sourcebot: not answering yet"; ok=0;;
+    esac
+  elif [ -z "$(env_get SOURCEBOT_API_KEY)" ]; then
+    say "  sourcebot key: ${Y}missing${N}"; sourcebot_key_howto; ok=0
+  else
+    say "  sourcebot key: set (not checked on Kubernetes; search_code returning 401 means it is stale)"
+  fi
   [ $ok = 1 ] && { say "${G}every scope is ready.${N}"; return 0; }
   warn "not ready yet: answers only cover processed documents. Watch with: scripts/demo.sh watch $K"; return 1
 }
@@ -184,6 +210,7 @@ case $CMD in
     head_ "starting the stack with the test environment (scripts/up.sh --test $HO --index --sync $K)"
     PYTHON=$PY scripts/up.sh --test $HO --index --sync $K || { warn "up.sh failed: see the output above; scripts/demo.sh status $K shows what is running"; exit 1; }
     grep -q "host.docker.internal" config/stack.env || pull_models
+    if { [ $K8S = 0 ] && [ "$(sourcebot_key_status)" != ok ]; } || { [ $K8S = 1 ] && [ -z "$(env_get SOURCEBOT_API_KEY)" ]; }; then echo; sourcebot_key_howto; fi
     head_ "${Y}NOT READY YET.${N}${B} Documents are being extracted into the per-scope graphs; code is being indexed.${N}"
     say "  Watch until every scope reads  N/N processed [idle]  and the code graph shows every repo indexed:"
     say "      ${B}scripts/demo.sh watch $K${N}         (or: scripts/demo.sh ready $K)"

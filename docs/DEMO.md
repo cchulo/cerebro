@@ -42,23 +42,33 @@ so you can tell at a glance which source an answer came from.
   `.demo/venv` from `scripts/requirements.txt` and uses that.
 - Claude Code or Cursor on the same machine, to play the agent.
 
-### Sourcebot and the GitHub token
+### The Sourcebot API key (one manual step, on purpose)
 
-Sourcebot (code search) and the indexer (code graph) clone the repositories listed in `config/scopes.yaml`. The
-four demo repositories are public, so **no token is required**, but Sourcebot lists them through the GitHub API,
-which allows only 60 unauthenticated requests per hour per IP. If Sourcebot logs rate-limit errors, or the moment
-you add a private repository, put a token in `config/stack.env`:
+Code search needs an API key that only Sourcebot's own UI can issue, so `up` stops with instructions the first time:
+
+1. Open http://127.0.0.1:3000 (compose; on Kubernetes `kubectl -n context-stack port-forward svc/sourcebot 3000:3000`).
+2. Register the first user. It is a local account inside this Sourcebot; any email and password will do, and that
+   first user becomes the owner.
+3. Settings > API Keys > create one, and paste it into `config/stack.env` as `SOURCEBOT_API_KEY=...`.
+4. `scripts/demo.sh up` again: the gateway is recreated with the key; `ready` confirms the key works.
+
+The key lives in Sourcebot's database, so `down --volumes` deletes it and the next `up` asks again. This is also
+where you can watch the repositories being cloned and indexed.
+
+### The GitHub token
+
+Sourcebot and the indexer clone the repositories listed in `config/scopes.yaml`. The four demo repositories are
+public, so no GitHub token is required, but Sourcebot lists them through the GitHub API, which allows only 60
+unauthenticated requests per hour per IP. If Sourcebot logs rate-limit errors, or the moment you add a private
+repository, put a token in `config/stack.env`:
 
 ```
 GITHUB_TOKEN=github_pat_...        # fine-grained token, read-only "Contents" and "Metadata" on the repositories
 ```
 
 `config/sourcebot/config.json` references it as `{ "env": "GITHUB_TOKEN" }`; the private-org form is in
-`config/sourcebot/config.private-org.example.json`. `SOURCEBOT_API_KEY` stays empty: the gateway is Sourcebot's only
-client and Sourcebot runs with anonymous access on its private port. After changing the token: `make gen && make up`
-(a plain restart keeps old environment).
-
-Sourcebot's own UI is at http://127.0.0.1:3000 (compose) if you want to show the repositories being indexed.
+`config/sourcebot/config.private-org.example.json`. After changing it: `make gen && make up` (a plain restart keeps
+old environment).
 
 ## Step by step
 

@@ -114,9 +114,8 @@ services:
       CONFIG_PATH: /config/config.json
       DATA_CACHE_DIR: /data
       SOURCEBOT_TELEMETRY_DISABLED: "true"      # PostHog product telemetry is on by default
-      # no manual API key: the gateway (the only client that can reach this loopback/ClusterIP port) searches anonymously;
-      # the gateway enforces the per-user repo scope itself. Set SOURCEBOT_API_KEY in stack.env to use a key instead.
-      FORCE_ENABLE_ANONYMOUS_ACCESS: "true"
+      # Every search needs an API key: the gateway sends SOURCEBOT_API_KEY (stack.env), created once in Sourcebot's UI
+      # (http://127.0.0.1:3000: register the first user, then Settings > API Keys). No anonymous access.
       # "service ping": periodic POST of org stats to deployments.sourcebot.dev, NOT covered by the flag above.
       # Point it at an unroutable address; only paid/online licences need it.
       SOURCEBOT_LIGHTHOUSE_URL: http://127.0.0.1:9

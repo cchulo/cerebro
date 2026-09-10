@@ -71,8 +71,7 @@ SSO Ingress you add may route to `svc/gateway`). An example oauth2-proxy + Caddy
 - [ ] Every space/repo assigned to one scope; nothing "public" that isn't
 - [x] Hindsight API auth enabled (`ApiKeyTenantExtension`, key in `config/stack.env`) so nobody can bypass the gateway
 - [ ] Inference backend (`LLM_PROVIDER`/`EMBED_PROVIDER`) is local or an org-approved endpoint — see README
-- [ ] Sourcebot reachable ONLY by the gateway: it runs with anonymous access (`FORCE_ENABLE_ANONYMOUS_ACCESS`) so
-      the gateway needs no key; its port is loopback/ClusterIP and must never be exposed, or put its UI behind the
-      same SSO and switch to `SOURCEBOT_API_KEY`
+- [ ] Sourcebot reachable ONLY by the gateway (loopback/ClusterIP, never exposed); every search carries the
+      `SOURCEBOT_API_KEY` created in its UI, and its UI sits behind the same SSO if anyone but admins can reach it
 - [ ] `make smoke` passes: a user in *no* group sees only `public`, cannot query/search/recall anything else;
       a user in `payments-team` sees `public` + `payments` and the team bank
