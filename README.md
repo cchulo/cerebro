@@ -116,6 +116,12 @@ Host or external models: set `LLM_BASE_URL` etc. in `config/stack.env` (pods on 
 `host.docker.internal`) and `kubectl -n context-stack scale deploy/ollama --replicas=0`. Details in
 [k8s/README.md](k8s/README.md).
 
+## The demo
+
+`scripts/demo.sh up` brings the whole stack up against fake organisation data (mock Confluence, Backstage and Jama,
+public repositories), `connect --as alice` hooks Claude Code or Cursor up as one of four demo users, `activity` shows
+what the stack does while the agent works, `down` removes it all. Storyline and prompts: [docs/DEMO.md](docs/DEMO.md).
+
 ## Wiring agents (Claude Code, Cursor, ...)
 
 One URL per developer, behind SSO: `https://context.internal/mcp` → the gateway. See

@@ -27,6 +27,25 @@ claude mcp list
 
 Claude Desktop, Windsurf, VS Code/Copilot, Codex CLI and Gemini CLI take the same URL.
 
+## Without a proxy (laptop, demo)
+
+The gateway reads the identity from `X-Forwarded-User` / `X-Forwarded-Groups`. Where no SSO proxy sits in front
+(the compose stack bound to 127.0.0.1, the demo), the client sends those headers itself:
+
+```sh
+claude mcp add --transport http context http://127.0.0.1:8090/mcp --scope user \
+  --header "X-Forwarded-User: alice" --header "X-Forwarded-Groups: payments-team"
+```
+
+```json
+{ "mcpServers": { "context": { "url": "http://127.0.0.1:8090/mcp",
+    "headers": { "X-Forwarded-User": "alice", "X-Forwarded-Groups": "payments-team" } } } }
+```
+
+`scripts/demo.sh connect --as <persona>` prints these for the demo users, `--write` places them in the repository
+(`.mcp.json`, `.cursor/mcp.json`). Anyone who can reach the port can claim any identity this way, which is why the
+gateway must never be exposed without the proxy ([ACCESS-CONTROL.md](ACCESS-CONTROL.md)).
+
 ## Tools the agent sees
 
 | Tool | What it does |

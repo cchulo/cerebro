@@ -8,7 +8,17 @@ import os, re, yaml
 from fastapi import FastAPI, HTTPException, Query
 
 MODE = os.environ.get("MOCK", "confluence")
-FIX = yaml.safe_load(open(f"/fixtures/{MODE}.yaml"))
+_FIX = {"mtime": None, "data": None}
+
+def fix():
+    """The fixture file, re-read whenever it changes on disk (scripts/demo.sh add-page edits it while running)."""
+    path = f"/fixtures/{MODE}.yaml"
+    mtime = os.stat(path).st_mtime
+    if _FIX["mtime"] != mtime:
+        with open(path) as f:
+            _FIX["data"] = yaml.safe_load(f)
+        _FIX["mtime"] = mtime
+    return _FIX["data"]
 app = FastAPI(title=f"mock-{MODE}")
 
 
@@ -21,7 +31,7 @@ if MODE == "confluence":
     @app.get("/rest/api/content")
     def content(spaceKey: str, start: int = 0, limit: int = 50, type: str = "page", status: str = "current",
                 expand: str = ""):
-        pages = FIX.get("spaces", {}).get(spaceKey, [])
+        pages = fix().get("spaces", {}).get(spaceKey, [])
         out = []
         for p in pages:
             restr = p.get("restricted_to_groups", [])
@@ -42,7 +52,7 @@ if MODE == "confluence":
         return {"results": page, "start": start, "limit": limit, "size": len(page), "_links": links}
 
     def _all_pages():
-        for sk in FIX.get("spaces", {}):
+        for sk in fix().get("spaces", {}):
             for p in content(sk, 0, 10000)["results"]:
                 p["space"] = {"key": sk}
                 yield p
@@ -87,7 +97,7 @@ if MODE == "confluence":
 elif MODE == "jama":
     # Jama Connect REST v1 subset: GET /rest/v1/items?project=<id>&startAt=&maxResults=  and  GET /rest/v1/items/{id}
     def _items(project: int):
-        for it in FIX.get("projects", {}).get(project, []):
+        for it in fix().get("projects", {}).get(project, []):
             yield {"id": it["id"], "documentKey": it.get("documentKey"), "itemType": it.get("itemType"),
                    "project": project, "modifiedDate": it.get("modifiedDate"), "fields": it.get("fields", {})}
 
@@ -101,7 +111,7 @@ elif MODE == "jama":
 
     @app.get("/rest/v1/items/{item_id}")
     def item(item_id: int):
-        for project in FIX.get("projects", {}):
+        for project in fix().get("projects", {}):
             for it in _items(project):
                 if it["id"] == item_id:
                     return {"meta": {"status": "OK"}, "data": it}
@@ -111,4 +121,4 @@ else:
     @app.get("/api/catalog/entities")
     def entities(filter: str = Query(default="")):
         kind = filter.split("kind=", 1)[1] if "kind=" in filter else None
-        return [e for e in FIX.get("entities", []) if not kind or e["kind"].lower() == kind.lower()]
+        return [e for e in fix().get("entities", []) if not kind or e["kind"].lower() == kind.lower()]
