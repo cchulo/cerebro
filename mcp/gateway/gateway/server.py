@@ -10,7 +10,7 @@ Tools exposed to agents:
 
 Engine APIs verified against: LightRAG v1.5.7, Sourcebot v5.1.10, Hindsight 0.9.2, CodeGraphContext 0.6.13.
 """
-import asyncio, os, re
+import asyncio, functools, inspect, json, logging, os, re, time
 import httpx
 from mcp.server.fastmcp import FastMCP, Context
 from mcp import ClientSession
@@ -44,6 +44,46 @@ mcp = FastMCP("agent-context-gateway", instructions=INSTRUCTIONS, host="0.0.0.0"
 def _caller(ctx: Context) -> acl.Caller:
     return acl.caller_from_headers(ctx.request_context.request.headers)
 
+# ----------------------------------------------------------------------------- activity log
+# One line when a tool is called (who, which tool, the arguments) and one when it returns (how long, or the error).
+# This is the trail `scripts/activity.py` / `scripts/demo.sh activity` shows next to the engines' own logs.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+log = logging.getLogger("gateway")
+
+def _brief(v, n: int = 100) -> str:
+    s = v if isinstance(v, str) else json.dumps(v, default=str)
+    return s if len(s) <= n else s[:n] + "..."
+
+def logged(fn):
+    """Wrap a tool so every call is logged. Keeps the signature FastMCP inspects (functools.wraps -> __wrapped__)."""
+    name = fn.__name__
+    def who(kw):
+        try:
+            c = _caller(kw["ctx"]); return f"{c.user}[{','.join(sorted(c.groups - acl.ALWAYS)) or '-'}]"
+        except Exception:
+            return "?"
+    def args(kw):
+        return " ".join(f"{k}={_brief(v)}" for k, v in kw.items() if k != "ctx" and v is not None)
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def wrapper(*a, **kw):
+            t = time.monotonic(); log.info("call %s  by %s  %s", name, who(kw), args(kw))
+            try:
+                r = await fn(*a, **kw)
+            except Exception as e:
+                log.info("fail %s  %.1fs  %s: %s", name, time.monotonic() - t, type(e).__name__, _brief(str(e), 140)); raise
+            log.info("done %s  %.1fs", name, time.monotonic() - t); return r
+    else:
+        @functools.wraps(fn)
+        def wrapper(*a, **kw):
+            t = time.monotonic(); log.info("call %s  by %s  %s", name, who(kw), args(kw))
+            try:
+                r = fn(*a, **kw)
+            except Exception as e:
+                log.info("fail %s  %.1fs  %s: %s", name, time.monotonic() - t, type(e).__name__, _brief(str(e), 140)); raise
+            log.info("done %s  %.1fs", name, time.monotonic() - t); return r
+    return wrapper
+
 def _lightrag_url(scope: str) -> str:
     return f"http://lightrag-{scope}:9621"
 
@@ -52,6 +92,7 @@ def _codegraph_url(scope: str) -> str:
 
 # ----------------------------------------------------------------------------- scopes
 @mcp.tool()
+@logged
 def list_scopes(ctx: Context) -> dict:
     """List the documentation/code scopes and memory banks the current user can access."""
     c = _caller(ctx)
@@ -61,11 +102,24 @@ def list_scopes(ctx: Context) -> dict:
 # ----------------------------------------------------------------------------- docs
 DOC_MODES = ("local", "global", "hybrid", "mix", "naive")
 
+# LightRAG marks its canned no-context reply with llm_generated=false, but when the graph holds *related* material it
+# writes a real answer that says it has nothing specific. Both are misses for the fallback's purpose.
+_NO_ANSWER = re.compile(r"no (specific |direct |relevant |explicit |detailed )?(information|mention|details|data|record|documentation)|"
+                        r"(does|do) not (contain|mention|include|provide|cover|have)|not (mentioned|covered|found|available|present|described) in|"
+                        r"unable to (find|locate)|cannot (find|locate)|could not find|(don't|do not) have (any )?(information|details)|"
+                        r"no documents? (was|were|is|are)? ?(found|available)", re.I)
+
+def _answered(body: dict) -> bool:
+    refs = body.get("references") or []
+    answer = body.get("response") or ""
+    return bool(body.get("llm_generated", True)) and bool(refs) and not _NO_ANSWER.search(answer[:600])
+
 def _decode_source(file_path: str) -> str:
     # ingest encodes "/" as "|" because LightRAG keeps only the basename of a source id (see ingest/ingest/lightrag.py)
     return file_path.replace("|", "/")
 
 @mcp.tool()
+@logged
 async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[str] | None = None,
                      fallback: bool = True) -> dict:
     """Ask the documentation knowledge graphs (Confluence, Backstage, repo docs, ADRs).
@@ -93,7 +147,7 @@ async def query_docs(ctx: Context, query: str, mode: str = "mix", scopes: list[s
             answer = body.get("response") or ""
             for ref in refs:                               # the answer text cites the encoded ids too
                 answer = answer.replace(ref.get("file_path", ""), _decode_source(ref.get("file_path", "")))
-            return {"scope": scope, "answer": answer, "indexed_answer": bool(body.get("llm_generated", True)) and bool(refs),
+            return {"scope": scope, "answer": answer, "indexed_answer": _answered(body),
                     "references": [{"id": ref.get("reference_id"), "source": _decode_source(ref.get("file_path", ""))}
                                    for ref in refs]}
 
@@ -152,6 +206,7 @@ def _live(name: str) -> live.LiveSource:
     return src
 
 @mcp.tool()
+@logged
 async def live_search(ctx: Context, source: str, query: str, scopes: list[str] | None = None, limit: int = 10) -> dict:
     """Search a system of record directly (e.g. source="confluence") when query_docs missed or may be stale.
     Confined to the spaces/projects of the caller's scopes; restricted pages are never returned. Returns refs for live_fetch."""
@@ -162,6 +217,7 @@ async def live_search(ctx: Context, source: str, query: str, scopes: list[str] |
     return {"source": source, "allowed": allowed, "results": await _live(source).search(query, allowed, limit)}
 
 @mcp.tool()
+@logged
 async def live_fetch(ctx: Context, source: str, ref: str, max_chars: int = 20000) -> dict:
     """Read one item from a system of record by the ref live_search returned (e.g. a Confluence page id).
     Refused if the item is outside the caller's scopes or carries its own read restriction."""
@@ -185,6 +241,7 @@ def _repo_filter(repos: list[str]) -> str:
     return "(" + " or ".join(f"repo:^{re.escape(n)}$" for n in names) + ")"
 
 @mcp.tool()
+@logged
 async def search_code(ctx: Context, query: str, max_results: int = 20, regex: bool = False) -> dict:
     """Search source code across the repositories the user can read (Sourcebot / Zoekt).
     Query syntax: bare terms are AND'ed, filters: file:<regex> lang:<name> sym:<symbol> rev:<branch>, negate with -,
@@ -196,7 +253,7 @@ async def search_code(ctx: Context, query: str, max_results: int = 20, regex: bo
         headers["Authorization"] = f"Bearer {SOURCEBOT_KEY}"
     async with httpx.AsyncClient(timeout=60, headers=headers) as h:
         r = await h.post(f"{SOURCEBOT}/api/search",
-                         json={"query": scoped_query, "matches": max_results, "contextLines": 2,
+                         json={"query": scoped_query, "matches": max_results * 10, "contextLines": 2,   # matches = lines, not files
                                "isRegexEnabled": regex})
         r.raise_for_status()
         data = r.json()
@@ -224,6 +281,7 @@ CODEGRAPH_TOOLS = {
 }
 
 @mcp.tool()
+@logged
 async def code_graph(ctx: Context, scope: str, tool: str, arguments: dict | None = None) -> dict:
     """Call a read-only CodeGraphContext tool inside ONE scope the user can read. Use list_scopes first.
     Tools: find_code, analyze_code_relationships, list_indexed_repositories, list_graphs, find_dead_code,
@@ -259,6 +317,7 @@ async def _hs(method: str, path: str, **kw):
         return r.json()
 
 @mcp.tool()
+@logged
 async def recall(ctx: Context, query: str, bank: str | None = None, budget: str = "mid", max_tokens: int = 4096) -> dict:
     """Recall relevant memories (prior work, decisions, corrections). Defaults to the user's personal bank;
     pass a team bank (see list_scopes) for shared memory. budget: low | mid | high."""
@@ -270,6 +329,7 @@ async def recall(ctx: Context, query: str, bank: str | None = None, budget: str 
     return res if res is not None else {"bank": b, "results": [], "note": "bank is empty"}
 
 @mcp.tool()
+@logged
 async def retain(ctx: Context, content: str, bank: str | None = None, context: str | None = None,
                  tags: list[str] | None = None) -> dict:
     """Store what happened: outcomes, decisions, things the docs got wrong. Never store restricted-doc content
@@ -285,6 +345,7 @@ async def retain(ctx: Context, content: str, bank: str | None = None, context: s
     return {"bank": b, **(res or {})}
 
 @mcp.tool()
+@logged
 async def reflect(ctx: Context, query: str, bank: str | None = None, budget: str = "low",
                   context: str | None = None) -> dict:
     """Ask the memory bank to reason over everything it knows about a question. budget: low | mid | high."""

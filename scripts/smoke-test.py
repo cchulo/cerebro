@@ -23,62 +23,8 @@ def say(text, color=WHITE):
     with _lock:
         print(paint(color, text), flush=True)
 
-class Activity:
-    """Tails the stack's logs while the test runs and prints the interesting lines in green."""
-    PATTERN = re.compile(r"CallToolRequest|POST /|query|Query|Processing|extract|Extract|Merging|embedding|recall|retain|"
-                         r"consolidat|confluence_search|confluence_get_page|search_code|Error|error|Traceback", re.I)
-    NOISE = re.compile(r"WORKER_STATS|pipeline_status|/health|status_counts|Terminating session|GET /api/version", re.I)
-    def __init__(self, mode):
-        self.mode, self.proc, self.thread = mode, None, None
-    def start(self):
-        root = pathlib.Path(__file__).resolve().parent.parent
-        if self.mode == "compose":
-            files = ["-f", "docker/compose.yaml", "-f", "docker/compose.scopes.yaml", "-f", "docker/compose.host-ollama.yaml", "-f", "docker/compose.test.yaml"]
-            env = {**os.environ, "COMPOSE_ENV_FILES": str(root / "config/stack.env")}
-            cmd = ["docker", "compose", *files, "logs", "-f", "--since", "1s", "--no-color", "gateway", "hindsight", "mcp-confluence",
-                   "sourcebot"] + [f"lightrag-{s}" for s in CFG["scopes"]]
-        elif self.mode == "k8s":
-            env = os.environ
-            cmd = ["kubectl", "-n", "context-stack", "logs", "-f", "--since=1s", "--prefix", "--max-log-requests=20",
-                   "-l", "app.kubernetes.io/part-of=context-stack"]
-        else:
-            return
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env, cwd=root)
-        self.thread = threading.Thread(target=self._pump, daemon=True); self.thread.start()
-    def _pump(self):
-        for line in self.proc.stdout:
-            line = line.rstrip()
-            if not self.PATTERN.search(line) or self.NOISE.search(line):
-                continue
-            if self.mode == "compose" and "|" in line:
-                svc, _, rest = line.partition("|"); svc = svc.strip().replace("agent-context-stack-", "").rsplit("-1", 1)[0]
-            elif self.mode == "k8s" and "]" in line:
-                svc, _, rest = line.partition("]"); svc = svc.strip("[ ").split("/")[-1].rsplit("-", 2)[0]
-            else:
-                svc, rest = "stack", line
-            rest = re.sub(r"^\s*(INFO|WARNING|ERROR)[:\s-]*", "", rest.strip())
-            say(f"    {svc:<18} {rest[:150]}", GREEN)
-    def stop(self):
-        if self.proc:
-            self.proc.terminate()
-
-def detect_activity(url):
-    if os.environ.get("SMOKE_ACTIVITY"):
-        return os.environ["SMOKE_ACTIVITY"]
-    root = pathlib.Path(__file__).resolve().parent.parent
-    try:
-        out = subprocess.run(["docker", "compose", "-f", "docker/compose.yaml", "ps", "-q", "gateway"], capture_output=True, text=True, cwd=root,
-                             env={**os.environ, "COMPOSE_ENV_FILES": str(root / "config/stack.env")}, timeout=15).stdout.strip()
-        if out:
-            return "compose"
-    except Exception:
-        pass
-    try:
-        if subprocess.run(["kubectl", "-n", "context-stack", "get", "deploy/gateway"], capture_output=True, timeout=15).returncode == 0:
-            return "k8s"
-    except Exception:
-        pass
-    return "none"
+from activity import Activity, detect_mode        # scripts/activity.py: the same tailer, standalone
+def detect_activity(url): return detect_mode()
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CFG = yaml.safe_load(open(ROOT / "config/scopes.yaml"))
@@ -188,12 +134,12 @@ async def main(url, live):
                   f"query_docs answered from index or fell back to confluence (fallback keys: {list(d5.get('fallback', {})) if not err else t[:60]})")
 
         # code search isolation: jinja is in the payments scope
-        err, d, t = await call(url, "alice", [], "search_code", {"query": "class Environment lang:python", "max_results": 10})
+        err, d, t = await call(url, "alice", [], "search_code", {"query": "def get_template file:environment.py", "max_results": 10})
         if err:
             say(f"  skip live search_code: {t[:100]}", DIM)
         else:
             check(all("pallets/jinja" not in f["repository"] for f in d["files"]), "alice's search never returns jinja")
-            err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "search_code", {"query": "class Environment lang:python", "max_results": 10})
+            err, d2, t = await call(url, "bob", [PRIVATE_GROUP], "search_code", {"query": "def get_template file:environment.py", "max_results": 10})
             check(not err and any("pallets/jinja" in f["repository"] for f in d2["files"]), f"bob's search reaches jinja ({len(d2['files']) if not err else t[:80]} files)")
         err, d, t = await call(url, "alice", [], "retain", {"content": "smoke test: alice ran the smoke test"})
         check(not err, f"retain: {t[:120]}")
@@ -220,7 +166,7 @@ if __name__ == "__main__":
         COLOR = False
     mode = detect_activity(a.url) if a.activity == "auto" else a.activity
     say(f"smoke test against {a.url}  (white: this test, green: stack activity from {mode})", DIM)
-    act = Activity(mode); act.start()
+    act = Activity(mode, emit=lambda text, kind: say(text, RED if kind == 'error' else GREEN)); act.start()
     try:
         rc = asyncio.run(main(a.url, a.live))
     finally:
