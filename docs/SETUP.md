@@ -222,6 +222,8 @@ label (other projects, hand-made volumes) is ever touched.
 | `scripts/up.sh --sync --wait` | ... then keep showing documents processed per scope until all are done |
 | `scripts/status.sh` / `--k8s` | is it working, is it progressing (section 9) |
 | `scripts/watch.sh` / `--k8s` / `--interval N` | the status screen refreshing every 5 s until Ctrl-C |
+| `scripts/activity.py` / `--mode k8s` / `--all` | live trail: gateway tool calls (white) and engine activity (green) |
+| `scripts/demo.sh up \| ready \| watch \| activity \| connect \| add-page \| smoke \| down` | the demo against fake data end to end ([DEMO.md](DEMO.md)) |
 | `scripts/up.sh --test --host-ollama --index --sync` | test environment with host Ollama, then index every scope's code and sync all sources |
 | `scripts/up.sh --k8s [--test]` | `kubectl apply -k k8s` (or `test`) and wait for pods |
 | `scripts/down.sh` | remove containers and networks, keep data volumes |
@@ -307,6 +309,9 @@ Queueing is the other enemy: a query waits behind every in-flight extraction cal
 
 LightRAG caches extraction results per chunk text (`ENABLE_LLM_CACHE_FOR_EXTRACT`, on by default), so re-syncing a
 document whose text did not change costs no LLM calls even though the ingest deletes and re-inserts it.
+LightRAG's *query-answer* cache (`ENABLE_LLM_CACHE`) is switched off by the generator: it hands back the old answer
+verbatim after a sync has added exactly the document the question was about (verified on 1.5.7), which defeats the
+point of keeping the index fresh. Each `query_docs` therefore costs its two model calls every time.
 
 Schedule ingest when nobody is querying (the crons default to 02:00/03:00). Expect the first sync of a large space to
 take a while on a single local model regardless of settings: 1,000 pages ≈ 1,000–3,000 chunks ≈ 2–6 hours at 7 s each

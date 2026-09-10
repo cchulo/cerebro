@@ -42,6 +42,9 @@ LIGHTRAG_ENV = {
     # hidden reasoning off for every LightRAG call (Ollama binding only): measured 60 s / 6,560 output tokens per chunk with
     # qwen3.6:35b-mlx thinking vs 7 s / 675 tokens without, same entities. num_predict caps runaway outputs.
     "OLLAMA_LLM_THINK": "${LIGHTRAG_LLM_THINK:-false}", "OLLAMA_LLM_NUM_PREDICT": "${LIGHTRAG_MAX_OUTPUT_TOKENS:-4096}",
+    # query-answer cache OFF: it returns the old answer verbatim after a sync added the very document asked about
+    # (verified on 1.5.7). The per-chunk extraction cache (ENABLE_LLM_CACHE_FOR_EXTRACT) stays on: re-syncs stay cheap.
+    "ENABLE_LLM_CACHE": "false",
     "WHITELIST_PATHS": "/health",
     "LIGHTRAG_KV_STORAGE": "PGKVStorage", "LIGHTRAG_DOC_STATUS_STORAGE": "PGDocStatusStorage",
     "LIGHTRAG_VECTOR_STORAGE": "PGVectorStorage", "LIGHTRAG_GRAPH_STORAGE": "PGTableGraphStorage",
