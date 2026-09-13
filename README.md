@@ -15,8 +15,9 @@ memory store, who mints identities, and what provisions the workloads (Docker Co
 | Ingest | `cerebro/ingest` (this repo) | syncs document sources into the per-scope indexes through `plugins/` | `ingest`, port 8080 |
 | Provisioning | `compose` or `kubernetes` | renders and drives every unit above from `cerebro.yaml` | `postgres` (pgvector), `ollama` when used, `mcp-<plugin>` upstreams |
 
-A pgvector retrieval-only document adapter is described in the design and has a pip extra, but is not on `main` yet;
-LightRAG is the only `DocumentIndex` implementation today.
+A second `DocumentIndex` implementation, `pgvector`, keeps chunks and embeddings in the shared Postgres with no LLM
+extraction: cheap ingest, retrieved passages instead of a synthesised answer, one line of config to switch
+(`engines.docs.type: pgvector`). Verified against a real Postgres in tests.
 
 ## What the model sees, and where data can leave
 

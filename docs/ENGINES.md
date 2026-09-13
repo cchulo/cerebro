@@ -29,9 +29,12 @@ in chunks of 25; the query-answer cache is off (it returned stale answers after 
 per-chunk extraction cache stays on. Tuning through `options`: `max_async` 2, `max_parallel_insert` 1, `gleaning` 0,
 `think` false, `max_output_tokens` 4096. Verified in v2: unit tests against mocks of the same calls v1 verified live.
 
-**pgvector retrieval-only** is designed (chunks and embeddings in the `cerebro` database, no extraction, cheap ingest,
-`answer` = concatenated passages, for installs without a capable model endpoint) and has the `pgvector` pip extra and
-the `Inference` contract it would use, but no adapter is on `main` yet.
+**pgvector retrieval-only** (`engines.docs.type: pgvector`): chunks and embeddings in the `cerebro` database on the shared
+Postgres, table `docs_chunks` with an HNSW index, every statement scoped by `WHERE scope`, no LLM extraction. Ingest
+embeds through the `Inference` adapter; `answer` is the retrieved passages with their source headers, `answered` means a
+hit under `max_distance` (option, default 0.6). Pick it for installs without a capable model endpoint or when ingest
+cost matters more than synthesised answers; it provisions no unit of its own. Verified against a real Postgres
+(pgvector 0.8.6) in `tests/adapters/docs/test_pgvector.py` when `CEREBRO_TEST_PG_DSN` is set.
 
 **Writing another** (GraphRAG, a vector store with document-level security): subclass `DocumentIndex`, keep every
 document inside the `scope` you are given, map your engine's "nothing found" onto `answered=False`, declare `modes`,
