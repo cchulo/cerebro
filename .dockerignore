@@ -1,0 +1,16 @@
+# build context for images/*/Dockerfile (built from the repository root)
+.git
+.claude
+.venv
+.pytest_cache
+**/__pycache__
+*.egg-info
+dist
+build
+state
+deploy/generated
+docker/compose.generated.yaml
+cerebro.yaml
+.env
+secrets.env
+.demo
