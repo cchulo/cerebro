@@ -15,3 +15,7 @@ def ctx(example_config):
         def __init__(self): self.values = {}
         def get(self, name, default=None): return self.values.get(name, default)
     return AdapterContext(example_config, secrets=Secrets(), locator=StaticLocator(template="http://{unit}:8080"))
+
+
+def pytest_addoption(parser):
+    parser.addoption("--tokensave", default=None, help="path to a real tokensave binary for the end-to-end test")
