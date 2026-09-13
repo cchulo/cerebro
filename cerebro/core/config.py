@@ -1,6 +1,6 @@
 """cerebro.yaml: the one file an operator edits.
 
-Secrets are never in this file. String values may reference environment variables as ${NAME} or ${NAME:-default};
+Secrets are never in this file. Strings (mapping keys included) may reference environment variables as ${NAME} or ${NAME:-default};
 the loader interpolates them so endpoints can differ between compose and Kubernetes without two files.
 Run `cerebro schema` for the JSON schema (editor completion) and `cerebro validate` to check a file.
 """
@@ -259,11 +259,30 @@ def interpolate(value, env: dict[str, str] | None = None):
                 return default
             raise KeyError(f"cerebro.yaml references ${{{name}}} but it is not set")
         return _ENV.sub(sub, value)
-    if isinstance(value, dict):
-        return {k: interpolate(v, env) for k, v in value.items()}
+    if isinstance(value, dict):                # keys too: identity.tokens maps "${CEREBRO_TOKEN_ALICE}" -> principal
+        return {interpolate(k, env): interpolate(v, env) for k, v in value.items()}
     if isinstance(value, list):
         return [interpolate(v, env) for v in value]
     return value
+
+
+def read_env_file(path: str | os.PathLike | None) -> dict[str, str]:
+    """KEY=value lines (comments and blanks skipped, optional `export `, one pair of quotes stripped): the compose
+    `--env-file` / kubernetes Secret source, so `${NAME}` in cerebro.yaml resolves on the operator's machine the way
+    it does inside the units. Missing file -> {}."""
+    out: dict[str, str] = {}
+    if not path or not pathlib.Path(path).is_file():
+        return out
+    for line in pathlib.Path(path).read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.removeprefix("export ").partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        out[key.strip()] = value
+    return out
 
 
 def load_config(path: str | os.PathLike | None = None, env: dict[str, str] | None = None) -> Config:

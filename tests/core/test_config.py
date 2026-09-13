@@ -19,6 +19,17 @@ def test_interpolation():
     with pytest.raises(KeyError):
         interpolate("${MISSING}", {})
     assert interpolate({"k": ["${A}"]}, {"A": "1"}) == {"k": ["1"]}
+    assert interpolate({"${T}": {"subject": "alice"}}, {"T": "tok-1"}) == {"tok-1": {"subject": "alice"}}, "mapping keys too"
+
+
+def test_read_env_file_and_keys_from_env(tmp_path):
+    from cerebro.core.config import read_env_file
+    f = tmp_path / "secrets.env"
+    f.write_text("# comment\n\nPOSTGRES_PASSWORD=pw\nexport QUOTED='a=b'\nDQ=\"x\"\nEMPTY=\nnoequals\n")
+    assert read_env_file(f) == {"POSTGRES_PASSWORD": "pw", "QUOTED": "a=b", "DQ": "x", "EMPTY": ""}
+    assert read_env_file(tmp_path / "missing.env") == {} and read_env_file(None) == {}
+    (tmp_path / "c.yaml").write_text("version: 2\nidentity:\n  mode: static\n  tokens:\n    '${T_A}': {subject: alice}\n")
+    assert list(load_config(tmp_path / "c.yaml", env={"T_A": "secret-a"}).identity.tokens) == ["secret-a"]
 
 
 def test_duplicate_repo_rejected():
