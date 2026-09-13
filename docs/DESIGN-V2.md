@@ -196,9 +196,14 @@ What TokenSave does with that, verified against its README (v7.3): multi-branch 
 (`tokensave branch add` while that branch is checked out; each tracked branch gets its own libSQL database copied
 from the nearest ancestor and synced only for the diff); every query takes `graph_root` (absolute root of an
 initialised project) and an optional `graph_branch` (must be a tracked branch); and three cross-branch tools exist
-(`tokensave_branch_search`, `tokensave_branch_diff`, `tokensave_branch_list`). So the indexer for a unit checks each
-configured branch out in a worktree and runs `branch add`; the gateway passes `graph_root` and `graph_branch` on
-every call. TokenSave has no regex text search (its own hook passes regex patterns through to grep), so the unit
+(`tokensave_branch_search`, `tokensave_branch_diff`, `tokensave_branch_list`). Graphs are strictly per branch: each tracked
+branch is a full database copy, there is no merged cross-branch graph, and cross-branch questions are answered by
+`tokensave_branch_diff` and `tokensave_branch_search`. Two constraints shape the indexer: `branch add` tracks the
+branch currently checked out and needs a local ref, and worktrees get their own separate `.tokensave/`, which would
+split the databases. So the indexer for a unit works in one checkout: for each configured branch, `git checkout`,
+`tokensave branch add`, `tokensave sync`; then it returns to the default branch, which is the one the server binds to
+at startup. The gateway passes `graph_root` and `graph_branch` on every call; whether every graph tool honours
+`graph_branch` (the README documents it as a general query selector) is confirmed in the pilot. TokenSave has no regex text search (its own hook passes regex patterns through to grep), so the unit
 image bundles ripgrep behind a `grep` tool to satisfy the `search` capability. CodeGraphContext has neither branches
 nor sibling roots: under `unit: repo` it is one FalkorDB per repo, and `branch` is rejected as unsupported by its
 capability manifest.
