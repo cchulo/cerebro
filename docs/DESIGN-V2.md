@@ -448,3 +448,69 @@ for each vertical slice below.
 - ~~Docs default engine~~ **Decided 2026-09-13**: LightRAG stays the default; GraphRAG or retrieval-only are
   drop-in replacements through `DocumentIndex` (section 4).
 - ~~Language of the Kubernetes provisioner~~ **Decided 2026-09-13**: Python `kopf` first (section 8).
+
+## 12. Proposal: memory partitioned by scope set (not implemented)
+
+Raised 2026-09-13, after team banks were turned off by default because a member with wider access can write what they
+learned elsewhere into a bank their narrower teammates read. The idea below closes that without giving up shared memory.
+
+### The model
+
+A memory bank is identified by a **scope set**, not by a group. With scopes A, B, C:
+
+| Who | Scopes | Retains into (default) | Recalls from |
+|---|---|---|---|
+| member of B | {B} | bank {B} | {B} |
+| manager of B and C | {B, C} | bank {B, C} | {B}, {C}, {B, C} |
+| director in all | {A, B, C} | bank {A, B, C} | every bank whose set is a subset of {A, B, C} |
+
+One rule for both directions: **a principal may read and write a bank iff the bank's scope set is a subset of the
+principal's scope set.** A memory is therefore visible only to people who hold every scope its author held when they
+wrote it, so the manager sees what B-only and C-only members retained, plus what other {B, C} holders retained, and
+never what the director retained. Personal banks stay as they are (scope set plus the user, readable by one person).
+
+Retain targets the caller's full scope set by default. Writing into a narrower bank ({B} when you hold {B, C}) is
+the one way the old leak could return, so it is an explicit argument, off by policy (`memory.allow_narrowing: false`)
+until an organisation decides its people may share downward on purpose.
+
+When a user's scopes change nothing is moved: a memory keeps the set it was written under. Losing a scope removes
+read access to every bank containing it at the next request; gaining one adds the newly-subset banks.
+
+### How many banks, how many Hindsights
+
+The number of banks equals the number of **distinct scope sets among users who have retained something**, bounded by
+the number of users, not by 2^scopes; in practice it is close to the number of roles. The question is how many
+Hindsight *instances* that needs.
+
+| Layout | Instances | Isolation | Cost |
+|---|---|---|---|
+| one shared instance, one bank per scope set | 1 | bank-level: Hindsight partitions by bank, the gateway holds the only API key | ~700 MiB total |
+| one instance per scope, composite sets get their own instance on demand | #scopes + #composite sets in use | instance-level: a compromised or misbehaving instance exposes one set | ~700 MiB per instance, composites idle-scaled to zero |
+| one instance per scope set | #scope sets in use | instance-level | same per instance; every set pays |
+
+The second layout is the motivating case for the Kubernetes provisioner and for `idle_ttl`: singleton-scope instances
+run permanently, an instance for {B, C} is created by `Provisioner.ensure()` the first time a {B, C} holder retains or
+recalls, and the idle operator scales it to zero when no such user has used it for the TTL. The unit name would be a
+stable hash of the sorted scope set (`memory-b-c`, or `memory-<hash>` for long sets), produced by the memory adapter's
+`units()`, which the contract already allows.
+
+### How Hindsight should be used
+
+- **The bank is Hindsight's own partition unit**; use it for scope sets. Instances are for isolation and resource
+  quotas, not for addressing. Start with the shared instance and bank-per-scope-set (`engines.memory.unit: shared`),
+  which closes the leak with no new workloads.
+- Make the instance layout a config choice (`unit: shared | scope | scope_set`) so a deployment that needs
+  instance-level isolation flips it without touching the gateway: the adapter's `units()` and the bank-to-unit mapping
+  are the only things that change.
+- Name banks by scope set everywhere (`set:b+c`) so a memory's audience is legible in logs and in `list_scopes`.
+- Keep `retain` asynchronous as today, but record the scope set in the memory's `context` so an audit can find
+  anything written into a bank narrower than its author's set if narrowing is ever enabled.
+
+### Open questions
+
+- Should a scope-set bank also require the *group* (two groups can grant the same scope set)? Scope set alone is the
+  simpler and safer rule; groups are an identity detail the policy layer already reduces to scopes.
+- Service accounts: they hold scopes but no personal bank; under this model they retain into their scope-set bank
+  like anyone else, which may be what a CI agent should do, or may need an opt-out.
+- Migration from the group banks of v1 and of the interim v2 (`team-<group>`): a one-off job that moves each team bank
+  into the scope set that group grants.
