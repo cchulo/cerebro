@@ -1,7 +1,7 @@
 """Keycloak adapter: unit shape, issuer format, and seed() against a stateful respx fake of the admin REST API.
 Nothing here talks to a real Keycloak; the fake records what was created so idempotency can be asserted by running
 seed() twice."""
-import json, re
+import json
 import httpx, pytest, respx
 from cerebro.core import registry, TokenScope, load_config
 from cerebro.core.config import UserSeed
