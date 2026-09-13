@@ -81,7 +81,8 @@ class AuthServerConfig(BaseModel):
     realm: str = "cerebro"
     admin_user_env: str = "CEREBRO_AUTH_ADMIN_USER"
     admin_password_env: str = "CEREBRO_AUTH_ADMIN_PASSWORD"
-    public_url: str | None = Field(default=None, description="URL browsers reach the server at; issuer derives from it")
+    public_url: str | None = Field(default=None, description="URL browsers and MCP clients reach the server at; the issuer "
+                                                             "derives from it (keycloak default http://localhost:8180, published on 127.0.0.1)")
     options: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -102,8 +103,14 @@ class IdentityConfig(BaseModel):
     # static
     tokens: dict[str, PrincipalSeed] = Field(default_factory=dict, description="mode static: token -> principal")
     # builtin / external
-    issuer: str | None = None
-    audience: str | None = None
+    issuer: str | None = Field(default=None, description="the `iss` tokens carry (the URL users and MCP clients reach); "
+                                                         "builtin: derived from identity.server when unset")
+    internal_issuer_url: str | None = Field(default=None, description="the same issuer as reached from inside the stack: "
+                                            "discovery, JWKS and introspection are fetched there while `iss` stays "
+                                            "`issuer`. builtin: http://auth:8080/realms/<realm> when unset; external: "
+                                            "only when your IdP has a separate in-network address")
+    audience: str | None = Field(default=None, description="extra accepted `aud`; the gateway's resource id "
+                                                           "(gateway.public_url or host:port/path) is always accepted")
     groups_claim: str = "groups"
     scope_claim: str = "scope"
     token_validation: Literal["jwks", "introspection"] = "jwks"

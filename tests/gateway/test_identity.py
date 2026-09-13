@@ -188,6 +188,50 @@ class TestBearerJwt(IdentityProviderContract):
         assert a.challenge()["WWW-Authenticate"].endswith('"http://127.0.0.1:8090/.well-known/oauth-protected-resource"')
 
 
+    async def test_internal_issuer_url_is_where_discovery_and_jwks_are_fetched(self, make_config, make_ctx, sign, jwks):
+        """The stack reaches the issuer under another name: discovery goes there and the jwks_uri the document
+        publishes (public name) is rewritten onto it; `iss` in the token stays the public issuer."""
+        import respx
+        internal = "http://sso.internal:8080/realms/eng"
+        with respx.mock() as mock:
+            disc = mock.get(f"{internal}/.well-known/openid-configuration").mock(return_value=httpx.Response(200, json={
+                "issuer": ISSUER, "jwks_uri": f"{ISSUER}/protocol/openid-connect/certs"}))
+            keys = mock.get(f"{internal}/protocol/openid-connect/certs").mock(return_value=httpx.Response(200, json=jwks))
+            cfg = make_config(identity={**EXTERNAL, "internal_issuer_url": internal + "/"}, gateway={"public_url": RESOURCE})
+            a = registry.build("identity", "bearer_jwt", {}, make_ctx(cfg))
+            assert a.internal(f"{ISSUER}/x") == f"{internal}/x" and a.internal("https://elsewhere/x") == "https://elsewhere/x"
+            assert (await a.resolve(bearer(sign()))).issuer == ISSUER
+            assert disc.called and keys.called
+            assert a.protected_resource_metadata()["authorization_servers"] == [ISSUER], "clients are told the public name"
+
+
+# ------------------------------------------------------------------------------------------------- builtin: issuer from the auth adapter
+async def test_builtin_derives_issuer_and_internal_issuer_from_the_auth_adapter(make_config, make_ctx, sign, jwks):
+    """No identity.issuer in cerebro.yaml: keycloak says the public issuer is <public_url>/realms/<realm> and the
+    in-network one http://auth:8080/realms/<realm>; the audience is the gateway's resource id."""
+    import respx
+    from cerebro.gateway.identity import bearer_options
+    cfg = make_config(identity={"mode": "builtin", "server": {"type": "keycloak", "realm": "eng", "public_url": "https://sso.test"}},
+                      gateway={"public_url": RESOURCE})
+    ctx = make_ctx(cfg)
+    assert bearer_options(cfg, ctx) == {"issuer": ISSUER, "internal_issuer": "http://auth:8080/realms/eng"}
+    with respx.mock() as mock:
+        mock.get("http://auth:8080/realms/eng/.well-known/openid-configuration").mock(return_value=httpx.Response(200, json={
+            "issuer": ISSUER, "jwks_uri": f"{ISSUER}/protocol/openid-connect/certs"}))
+        keys = mock.get("http://auth:8080/realms/eng/protocol/openid-connect/certs").mock(return_value=httpx.Response(200, json=jwks))
+        ident = build_identity(cfg, ctx)
+        assert ident.name == "bearer_jwt" and ident.issuer == ISSUER and ident.audiences() == [RESOURCE]
+        assert (await ident.resolve(bearer(sign(aud=RESOURCE)))).subject == "alice" and keys.called
+        with pytest.raises(Unauthenticated):
+            await ident.resolve(bearer(sign(aud="https://other/mcp")))
+    pinned = make_config(identity={"mode": "builtin", "issuer": "https://pinned.test/realms/x", "internal_issuer_url": "http://auth:8080/realms/x"})
+    assert bearer_options(pinned, make_ctx(pinned)) == {}, "explicit config wins and the auth adapter is not consulted"
+    assert bearer_options(make_config(identity=EXTERNAL), ctx) == {}
+    missing = make_config(identity={"mode": "builtin", "server": {"type": "no-such-server"}})
+    with pytest.raises(RuntimeError, match="identity.issuer"):
+        bearer_options(missing, make_ctx(missing))
+
+
 # ------------------------------------------------------------------------------------------------- bearer_introspect
 INTROSPECT = {**EXTERNAL, "token_validation": "introspection",
               "introspection": {"client_id": "cerebro-gateway", "client_secret_env": "CEREBRO_OAUTH_CLIENT_SECRET"}}

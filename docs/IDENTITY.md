@@ -49,17 +49,27 @@ default all). Tokens never expire and cannot be revoked except by editing the fi
 
 ## Mode `builtin`: Keycloak provisioned by the stack
 
-`identity.server: { type: keycloak, realm: cerebro, public_url: https://auth.example.org }` makes the plan include
-unit `auth`: `quay.io/keycloak/keycloak:26.7.3`, Postgres database `keycloak`, health on `/health/ready` moved to the
-main port 8080 (`KC_HTTP_MANAGEMENT_HEALTH_ENABLED=false`, so block `/health` at your proxy). Without `public_url` it
-runs `start-dev` and derives `iss` from the request's Host header; with it, `start --hostname <public_url>` and `iss`
-is fixed. Secrets: `POSTGRES_PASSWORD`, `CEREBRO_AUTH_ADMIN_USER`, `CEREBRO_AUTH_ADMIN_PASSWORD` (bootstrap admin;
-add them to `secrets.keys`), optional `CEREBRO_SEED_PASSWORD`.
+`identity.mode: builtin` (with `identity.server: { type: keycloak, realm: cerebro }`, the default) makes the plan
+include unit `auth`: `quay.io/keycloak/keycloak:26.7.3`, Postgres database `keycloak`, health on `/health/ready`
+moved to the main port 8080 (`KC_HTTP_MANAGEMENT_HEALTH_ENABLED=false`, so block `/health` at your proxy). Secrets:
+`POSTGRES_PASSWORD`, `CEREBRO_AUTH_ADMIN_USER`, `CEREBRO_AUTH_ADMIN_PASSWORD` (bootstrap admin; add them to
+`secrets.keys`), optional `CEREBRO_SEED_PASSWORD`.
 
-The issuer is `<public_url or http://auth:8080>/realms/<realm>`. Today the gateway does **not** derive it from the
-adapter: set `identity.issuer` to exactly that value (no trailing slash) or `bearer_jwt` raises at the first request
-and the metadata endpoint returns an error. `identity.audience` is optional; the accepted `aud` is
-`gateway.public_url` (or `http://host:port/path`) plus `identity.audience` when set.
+**Two URLs.** `identity.server.public_url` (default `http://localhost:8180`) is where browsers and MCP clients reach
+Keycloak; the unit always runs `start --hostname <public_url> --http-enabled true`, so the `iss` it signs is pinned to
+`<public_url>/realms/<realm>` however a request arrived. The gateway, though, reaches the unit on the stack network
+as `http://auth:8080`. So the gateway keeps both: the **issuer** (what tokens carry, what the RFC 9728 metadata
+advertises) and the **internal issuer** (`http://auth:8080/realms/<realm>`, where it fetches discovery and the JWKS,
+rewriting the URLs the discovery document publishes under the public name onto it). In `builtin` mode the gateway
+derives both from the adapter; `identity.issuer` and `identity.internal_issuer_url` override them, and
+`identity.jwks_url` still short-circuits discovery entirely. `identity.audience` is optional: the accepted `aud` is
+always the gateway's resource id, `gateway.public_url` (or `http://host:port/path`), plus `identity.audience` when set.
+
+When `public_url` names a loopback host (the default), the compose renderer publishes the unit on the host's
+`127.0.0.1:<port of public_url>` (`127.0.0.1:8180:8080`) so a browser can log in and an MCP client can complete the
+PKCE flow; on kubernetes reach it with `kubectl -n cerebro port-forward svc/auth 8180:8080`. Any other `public_url`
+(`https://auth.example.org`) is yours to route: a TLS reverse proxy on the compose network
+(`provisioning.options.compose_files`) or an Ingress, with `options.proxy_headers: xforwarded`.
 
 **Seeding.** `Adapter.seed(users, groups, resource_id)` creates, idempotently: the realm (`sslRequired` from
 `options.ssl_required`, default `external`; brute-force protection on), one group per name in `scopes.*.groups`
@@ -82,9 +92,9 @@ groups = sorted({g for s in cfg.scopes.values() for g in s.groups})
 print(json.dumps(asyncio.run(auth.seed(cfg.identity.users, groups, cfg.resource_id())), indent=2))
 ```
 
-The compose renderer publishes only the gateway's port; browsers reach Keycloak through the reverse proxy you put in
-front of `auth` (or an Ingress on Kubernetes). First login: the seeded user signs in with the temporary password and
-is asked to register a passkey (or set a password when the realm has no passkey action).
+First login: the seeded user opens `<public_url>` (the account console at `<public_url>/realms/<realm>/account`, or
+the MCP client's login page), signs in with the temporary password and is asked to register a passkey (or set a
+password when the realm has no passkey action).
 
 **Two Keycloak facts that shape this** (read from Keycloak's documentation for 26.7.3, quoted in
 `cerebro/adapters/auth/keycloak.py`):

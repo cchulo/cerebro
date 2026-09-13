@@ -30,7 +30,7 @@ class Adapter(BearerBase):
         url = (await self.issuer_metadata()).get("introspection_endpoint")
         if not url:
             raise Unauthenticated(f"issuer {self.issuer} publishes no introspection_endpoint")
-        return str(url)
+        return self.internal(url)
 
     async def introspect(self, token: str) -> dict[str, Any]:
         intro = self.identity.introspection

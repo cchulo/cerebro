@@ -189,20 +189,30 @@ GROUPS = ["payments-team", "sre", "platform-leads"]
 # ---------------------------------------------------------------------------------------------------- shape
 def test_is_authorization_server_and_issuer_format(adapter):
     assert isinstance(adapter, AuthorizationServer) and adapter.kind == "auth" and adapter.name == "keycloak"
-    assert adapter.issuer() == "http://auth:8080/realms/cerebro"
-    assert adapter.registration_endpoint() == "http://auth:8080/realms/cerebro/clients-registrations/openid-connect"
+    assert adapter.issuer() == "http://localhost:8180/realms/cerebro", "public_url defaults to the loopback port compose publishes"
+    assert adapter.internal_issuer() == "http://auth:8080/realms/cerebro", "the same realm as the gateway reaches it"
+    assert adapter.registration_endpoint() == "http://localhost:8180/realms/cerebro/clients-registrations/openid-connect"
+    assert adapter.publish_port() == 8180
 
 
 def test_issuer_follows_public_url(builtin_ctx):
     builtin_ctx.config.identity.server.public_url = "http://localhost:8180/"
     builtin_ctx.config.identity.server.realm = "eng"
-    assert registry.build("auth", "keycloak", {}, builtin_ctx).issuer() == "http://localhost:8180/realms/eng"
+    a = registry.build("auth", "keycloak", {}, builtin_ctx)
+    assert a.issuer() == "http://localhost:8180/realms/eng" and a.internal_issuer() == "http://auth:8080/realms/eng"
+    builtin_ctx.config.identity.server.public_url = "https://sso.example.org"
+    a = registry.build("auth", "keycloak", {}, builtin_ctx)
+    assert a.publish_port() is None, "a public hostname is routed by the operator's proxy or Ingress, never published"
+    assert a.units()[0].publish_port is None
+    builtin_ctx.config.identity.server.public_url = "http://127.0.0.1:9000"
+    assert registry.build("auth", "keycloak", {}, builtin_ctx).publish_port() == 9000
 
 
-def test_units_dev_shape(adapter):
+def test_units_default_shape(adapter):
     (u,) = adapter.units()
     assert u.name == "auth" and u.role == "auth" and u.image == keycloak.IMAGE == "quay.io/keycloak/keycloak:26.7.3"
-    assert u.args == ["start-dev"] and u.http_port == 8080 and u.health_path == "/health/ready"
+    assert u.args == ["start", "--hostname", "http://localhost:8180", "--http-enabled", "true"], "iss pinned to public_url"
+    assert u.http_port == 8080 and u.publish_port == 8180 and u.health_path == "/health/ready"
     assert u.depends_on == ["postgres"] and u.volumes == []
     assert u.env["KC_DB"] == "postgres" and u.env["KC_DB_URL"] == "jdbc:postgresql://postgres:5432/keycloak"
     assert u.env["KC_DB_USERNAME"] == "cerebro" and u.env["KC_DB_PASSWORD"] == "${POSTGRES_PASSWORD}"
@@ -302,7 +312,7 @@ async def test_seed_reuses_existing_and_creates_missing(adapter, api, capsys):
     assert next(c for c in fake.components if c["id"] == "c-th-auth")["config"] == {"trusted-hosts": []}
     # no CIMD unless the feature is on
     assert fake.profiles["profiles"] == [] and fake.policies == {"policies": []}
-    assert report["issuer"] == "http://auth:8080/realms/cerebro" and report["client_id"] == "cerebro-mcp"
+    assert report["issuer"] == "http://localhost:8180/realms/cerebro" and report["client_id"] == "cerebro-mcp"
 
 
 async def test_seed_twice_creates_nothing_the_second_time(adapter, api):

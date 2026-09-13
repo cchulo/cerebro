@@ -2,9 +2,10 @@
 
 Used by identity.mode builtin (Keycloak the stack runs) and external (the organisation's IdP): same code, a
 different issuer URL. Checks, in PyJWT: signature against a key from the JWKS (identity.jwks_url, or `jwks_uri`
-from the issuer's discovery document), `iss` == identity.issuer, `aud` contains the RFC 8707 resource identifier
-(Config.resource_id(), or identity.audience), `exp`. The JWKS is cached (options.jwks_ttl, default 1h) and
-refetched once when a token names an unknown `kid` (key rotation).
+from the issuer's discovery document, fetched through identity.internal_issuer_url when the stack reaches the
+issuer under another name), `iss` == identity.issuer (builtin: derived from the auth adapter), `aud` contains the
+RFC 8707 resource identifier (Config.resource_id(), or identity.audience), `exp`. The JWKS is cached
+(options.jwks_ttl, default 1h) and refetched once when a token names an unknown `kid` (key rotation).
 
 Claims -> Principal: see cerebro.adapters.identity._claims.principal_from_claims (groups_claim, scope_claim,
 service detection). Options: algorithms (default: the asymmetric ones), leeway (seconds), jwks_ttl, timeout.
@@ -42,7 +43,7 @@ class Adapter(BearerBase):
         url = (await self.issuer_metadata()).get("jwks_uri")
         if not url:
             raise Unauthenticated(f"issuer {self.issuer} publishes no jwks_uri")
-        return str(url)
+        return self.internal(url)
 
     async def jwks(self, *, refresh: bool = False) -> jwt.PyJWKSet:
         if self._jwks is not None and not refresh and time.monotonic() - self._jwks_at < self.jwks_ttl:

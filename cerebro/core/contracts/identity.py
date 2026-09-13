@@ -54,7 +54,12 @@ class AuthorizationServer(Adapter):
     kind = "auth"
 
     @abstractmethod
-    def issuer(self) -> str: ...
+    def issuer(self) -> str:
+        """The `iss` tokens carry: the URL users and MCP clients reach the server at."""
+
+    def internal_issuer(self) -> str:
+        """The same issuer as the gateway reaches it from inside the stack (discovery, JWKS). Default: issuer()."""
+        return self.issuer()
 
     @abstractmethod
     async def seed(self, users: list[UserSeed], groups: list[str], resource_id: str) -> dict:

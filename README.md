@@ -75,15 +75,16 @@ Every request then needs the token, loopback included; never publish beyond loop
 
 ## Quick start: a team, builtin Keycloak
 
-Same install. In `cerebro.yaml`: `identity.mode: builtin`, `identity.server: { type: keycloak, realm: cerebro, public_url: https://auth.example.org }`,
-`identity.issuer: https://auth.example.org/realms/cerebro` (the gateway does not derive it yet), `identity.users:`,
-`gateway.public_url: https://context.example.org/mcp`, and `CEREBRO_AUTH_ADMIN_USER`, `CEREBRO_AUTH_ADMIN_PASSWORD`
-in `secrets.keys` and `secrets.env`. Then `cerebro provision up`, seed the realm (users, groups, the `cerebro-mcp`
-public client, token scopes with audience mappers) as described in [docs/IDENTITY.md](docs/IDENTITY.md), put your
-TLS reverse proxy or Ingress in front of `gateway` and `auth`, and hand every developer the one URL. Their MCP client
-discovers the authorization server from the gateway's RFC 9728 metadata and logs in with PKCE
-([docs/CONNECT.md](docs/CONNECT.md)). Verified so far: unit tests against a mocked Keycloak admin API; not yet run
-against a live Keycloak in v2.
+Same install. In `cerebro.yaml`: `identity.mode: builtin`, `identity.users:`, and `CEREBRO_AUTH_ADMIN_USER`,
+`CEREBRO_AUTH_ADMIN_PASSWORD` in `secrets.keys` and `secrets.env`. The gateway derives the issuer from the Keycloak
+unit (`<identity.server.public_url>/realms/cerebro`, default `http://localhost:8180`, which compose publishes on
+`127.0.0.1:8180` so browsers can log in) and validates tokens for its own resource id. For a real team set
+`identity.server.public_url: https://auth.example.org` and `gateway.public_url: https://context.example.org/mcp`,
+put your TLS reverse proxy or Ingress in front of `gateway` and `auth`, and hand every developer the one URL. Then
+`cerebro provision up`, seed the realm (users, groups, the `cerebro-mcp` public client, token scopes with audience
+mappers) as described in [docs/IDENTITY.md](docs/IDENTITY.md). Their MCP client discovers the authorization server
+from the gateway's RFC 9728 metadata and logs in with PKCE ([docs/CONNECT.md](docs/CONNECT.md)). Verified so far:
+unit tests against a mocked Keycloak admin API and issuer; not yet run against a live Keycloak in v2.
 
 ## Layout
 

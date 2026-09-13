@@ -28,9 +28,10 @@ may contain `${NAME}` or `${NAME:-default}`, interpolated from the environment w
 | `identity.principal` | `{subject: local, groups: [everyone, admin]}` | mode `none`: who every request is |
 | `identity.allow_remote` / `static_token_env` | `false` / `CEREBRO_TOKEN` | mode `none`: the explicit LAN option; publish beyond loopback, then every request needs this bearer |
 | `identity.tokens` | `{}` | mode `static`: token to principal map (`subject`, `groups`, `kind`, `token_scopes`) |
-| `identity.issuer`, `audience`, `groups_claim`, `scope_claim` | none, none, `groups`, `scope` | `builtin` and `external`: the OAuth issuer and how claims map; `external` requires issuer and audience |
+| `identity.issuer`, `audience`, `groups_claim`, `scope_claim` | none, none, `groups`, `scope` | `builtin` and `external`: the OAuth issuer (the `iss` tokens carry) and how claims map; `builtin` derives the issuer from `identity.server`, `external` requires issuer and audience; the gateway's own resource id is always an accepted `aud` |
+| `identity.internal_issuer_url` | none (`builtin`: `http://auth:8080/realms/<realm>`) | the issuer as reached from inside the stack: discovery, JWKS and introspection are fetched there, `iss` stays `issuer` ([IDENTITY.md](IDENTITY.md)) |
 | `identity.token_validation`, `jwks_url`, `introspection` | `jwks`, from discovery, none | `introspection` needs `{url?, client_id, client_secret_env}` |
-| `identity.server` | `{type: keycloak, realm: cerebro}` in `builtin` | `public_url` (browsers reach it there), `admin_user_env`, `admin_password_env`, `options` |
+| `identity.server` | `{type: keycloak, realm: cerebro, public_url: http://localhost:8180}` in `builtin` | `public_url` (browsers and MCP clients reach it there; a loopback one is published on `127.0.0.1` by compose), `admin_user_env`, `admin_password_env`, `options` |
 | `identity.users` | `[]` | `builtin`: `{name, groups, email?}` seeded once |
 | `identity.legacy` | none | `{type: trusted_headers, user_header, groups_header}`: an SSO proxy's headers as a second provider |
 | `policy.type`, `always_groups`, `team_banks_from_groups` | `groups`, `[everyone]`, `true` | IdP groups to scopes; `team-<group>` memory banks |
@@ -100,8 +101,9 @@ contains, read from `deploy/generated/compose.yaml`:
 
 - Images with a `build:` (`cerebro/gateway`, `cerebro/ingest`, `cerebro/code-unit:<cerebro version>`) are built by
   compose from `images/` on the first `up`; the rest are pulled. `provisioning.image_registry` prefixes the built ones.
-- Only the gateway publishes a port, on `gateway.host:gateway.port`. Engines, Postgres, Ollama and MCP upstreams are
-  reachable on the compose network only, by unit name.
+- The gateway publishes its port on `gateway.host:gateway.port`, and in `builtin` mode `auth` is published on
+  `127.0.0.1:<port of identity.server.public_url>` (default 8180) when that URL names a loopback host. Engines,
+  Postgres, Ollama and MCP upstreams are reachable on the compose network only, by unit name.
 - `cerebro.yaml` and `plugins/` are bind-mounted read-only into `gateway` and `ingest`; secrets are `${NAME}` references
   resolved from `--env-file` at run time.
 - Jobs are services under the `jobs` profile. Scheduled ones get a `scheduler` service: `docker:27-cli` running busybox
@@ -195,7 +197,8 @@ Note the position of `-c`: for `cerebro ingest` it precedes the subcommand. From
 |---|---|
 | published gateway port answers nothing, container healthy | the gateway was started without the provisioner's env (`CEREBRO_GATEWAY_BIND`, and in mode `none` `CEREBRO_TRUSTED_NETWORK`): re-render with `cerebro provision up` (section 5) |
 | `401 invalid_token` on every call | no or wrong bearer; in `builtin`/`external` the `WWW-Authenticate` header names the metadata URL your client should follow |
-| `RuntimeError: identity adapter bearer_jwt needs identity.issuer` | `builtin` mode without an explicit `identity.issuer` (set it to `<public_url>/realms/<realm>`) |
+| `RuntimeError: identity.mode builtin: cannot derive the issuer` | `identity.server.type` names an auth adapter that does not exist; fix the type or set `identity.issuer` and `identity.internal_issuer_url` yourself |
+| `401` with `issuer metadata ... names a different issuer` | the server's hostname is not pinned to `identity.server.public_url` (a Keycloak you run yourself); set `identity.issuer` to what it signs |
 | `no docs adapter ...` note in `/health` | the `type:` names an adapter module that does not exist or lacks its extra |
 | `query_docs` answers with `answered: false` and `fallback` | LightRAG has not finished extracting, or the index has nothing; the live sources were searched |
 | `not indexed yet` from a code tool | the `index-<unit>` job has not run for that repository |

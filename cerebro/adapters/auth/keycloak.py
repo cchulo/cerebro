@@ -3,13 +3,16 @@
 Two jobs: describe the unit the provisioner runs, and seed the realm through the admin REST API so that
 `users:` in cerebro.yaml can log in and MCP clients can obtain tokens for the gateway without hand work.
 
-Issuer. `issuer()` is `<public_url or http://auth:8080>/realms/<realm>`. Without `public_url` the unit runs
-`start-dev`, where Keycloak derives `iss` from the request's Host header; the gateway reaches it at the unit's
-internal address (`http://auth:8080`), so tokens fetched through that address carry that issuer. With `public_url`
-the unit runs `start --hostname <public_url> --http-enabled true`, and `iss` is fixed to that URL regardless of how
-the request arrived. The gateway's bearer_jwt adapter must therefore expect exactly
-`{public_url or 'http://auth:8080'}/realms/{realm}` (no trailing slash) and fetch JWKS from
-`<issuer>/protocol/openid-connect/certs` (RFC 8414 metadata at `<issuer>/.well-known/openid-configuration`).
+Two URLs. `issuer()` is `<public_url>/realms/<realm>` with `public_url` defaulting to http://localhost:8180: the
+unit always runs `start --hostname <public_url> --http-enabled true`, so `iss` is pinned to that URL however a
+request arrived (Keycloak would otherwise derive it from the Host header, and the gateway's backchannel request
+would mint a different issuer than the browser's). On compose the unit is published on the host's
+127.0.0.1:<port of public_url> when its hostname is loopback (`publish_port`), which is where browsers and MCP
+clients go; any other public_url is yours to route (a reverse proxy on the compose network, an Ingress on
+kubernetes). `internal_issuer()` is `http://auth:8080/realms/<realm>`, the same realm as the gateway reaches it on
+the stack network: the bearer_jwt adapter fetches RFC 8414 metadata and JWKS there and rewrites the URLs the
+document publishes (they carry the pinned public hostname) onto it, while validating `iss` == `issuer()`.
+cerebro.gateway.identity derives both from this adapter when identity.issuer / internal_issuer_url are unset.
 
 Image and version. quay.io/keycloak/keycloak:26.7.3 (listed by https://quay.io/api/v1/repository/keycloak/keycloak/tag/
 on 2026-09-13; 26.3 asked for originally is superseded). Health: Keycloak serves /health/ready on the management port
@@ -53,7 +56,7 @@ Options (identity.server.options):
     features                list passed as KC_FEATURES (e.g. [cimd]); default none
     cimd_trusted_domains    wildcard domain list for the CIMD executor/condition; required for cimd to do anything
     cimd_allow_http         allow http client_id URLs (dev only), default false
-    proxy_headers           xforwarded | forwarded: adds --proxy-headers when public_url is set
+    proxy_headers           xforwarded | forwarded: adds --proxy-headers (a reverse proxy in front of public_url)
     ssl_required            realm sslRequired on creation: external (default) | none | all
     trusted_hosts           extra hosts for the anonymous DCR Trusted Hosts policy (default loopback only)
     admin_url               where the admin API is reachable from this process (default: Locator endpoint of unit auth)
@@ -67,6 +70,7 @@ generated and printed once when unset).
 from __future__ import annotations
 import logging, secrets as _secrets, sys
 from typing import Any
+from urllib.parse import urlsplit
 import httpx
 from cerebro.core.config import AuthServerConfig, UserSeed
 from cerebro.core.contracts.identity import AuthorizationServer
@@ -78,6 +82,8 @@ log = logging.getLogger(__name__)
 IMAGE = "quay.io/keycloak/keycloak:26.7.3"
 UNIT = "auth"
 PORT = 8080
+DEFAULT_PUBLIC_URL = "http://localhost:8180"      # published on the host's loopback by the compose renderer
+LOOPBACK_NAMES = ("localhost", "127.0.0.1", "::1")
 CLIENT_ID = "cerebro-mcp"
 GROUPS_SCOPE = "groups"
 LOOPBACK_REDIRECTS = ["http://127.0.0.1:*", "http://localhost:*", "urn:ietf:wg:oauth:2.0:oob"]
@@ -158,10 +164,21 @@ class Adapter(AuthorizationServer):
         return f"http://{UNIT}:{PORT}"
 
     def public_base(self) -> str:
-        return (self.server.public_url or self.internal_url).rstrip("/")
+        return (self.server.public_url or DEFAULT_PUBLIC_URL).rstrip("/")
 
     def issuer(self) -> str:
         return f"{self.public_base()}/realms/{self.realm}"
+
+    def internal_issuer(self) -> str:
+        return f"{self.internal_url}/realms/{self.realm}"
+
+    def publish_port(self) -> int | None:
+        """The host loopback port the compose renderer publishes the unit on: public_url's port when its hostname
+        is loopback (the one-machine and demo case); None otherwise (a proxy or Ingress of yours is in front)."""
+        u = urlsplit(self.public_base())
+        if u.hostname not in LOOPBACK_NAMES:
+            return None
+        return u.port or (443 if u.scheme == "https" else 80)
 
     def admin_url(self) -> str:
         url = self.option("admin_url") or (self.ctx.locator.endpoint(UNIT) if self.ctx else self.internal_url)
@@ -189,16 +206,13 @@ class Adapter(AuthorizationServer):
         }
         if self.features:
             env["KC_FEATURES"] = ",".join(self.features)
-        if s.public_url:
-            args = ["start", "--hostname", s.public_url, "--http-enabled", "true"]
-            if self.option("proxy_headers"):
-                args += ["--proxy-headers", str(self.option("proxy_headers"))]
-        else:
-            args = ["start-dev"]
+        args = ["start", "--hostname", self.public_base(), "--http-enabled", "true"]     # iss pinned, see the docstring
+        if self.option("proxy_headers"):
+            args += ["--proxy-headers", str(self.option("proxy_headers"))]
         return [UnitSpec(
             name=UNIT, role="auth", image=IMAGE, args=args, env=env,
             secret_env=[POSTGRES_SECRET, s.admin_user_env, s.admin_password_env],
-            ports=[PortSpec(name="http", port=PORT)],
+            ports=[PortSpec(name="http", port=PORT)], publish_port=self.publish_port(),
             health_path="/health/ready", depends_on=["postgres"],
             resources=dict(self.option("resources") or {}),
             labels={"cerebro.engine": "keycloak"},

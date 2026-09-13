@@ -4,6 +4,12 @@ document and the 401 challenge. Not an adapter itself.
 The resource identifier (RFC 8707) is `Config.resource_id()`: gateway.public_url or host:port + path. The
 protected-resource metadata is served by the gateway at `<origin>/.well-known/oauth-protected-resource` (and the
 RFC 9728 path-suffixed form), which is what the challenge points at.
+
+Two issuer URLs: `issuer` is what tokens carry and what the metadata advertises to MCP clients; `internal_issuer`
+(identity.internal_issuer_url, or the builtin server's in-network address) is where this process fetches discovery,
+JWKS and introspection, with the URLs the issuer publishes rewritten onto it (`internal()`). They are the same URL
+unless the authorization server sits behind a different name inside the stack (compose: `http://auth:8080` while
+browsers use `http://localhost:8180`).
 """
 from __future__ import annotations
 import asyncio
@@ -62,6 +68,19 @@ class BearerBase(IdentityProvider):
         return str(iss).rstrip("/")
 
     @property
+    def internal_issuer(self) -> str:
+        """Where discovery, JWKS and introspection are fetched: identity.internal_issuer_url (or the auth adapter's
+        in-network address in builtin mode), else the issuer itself. Tokens still carry `iss` == issuer."""
+        return str(self.option("internal_issuer") or self.identity.internal_issuer_url or self.issuer).rstrip("/")
+
+    def internal(self, url: str) -> str:
+        """A URL the issuer published (jwks_uri, introspection_endpoint) rewritten onto the in-network address."""
+        url = str(url)
+        if self.internal_issuer != self.issuer and (url == self.issuer or url.startswith(self.issuer + "/")):
+            return self.internal_issuer + url[len(self.issuer):]
+        return url
+
+    @property
     def resource(self) -> str:
         return self.ctx.config.resource_id()
 
@@ -86,7 +105,7 @@ class BearerBase(IdentityProvider):
                 return self._metadata
             last: Exception | None = None
             async with self._client() as h:
-                for url in discovery_urls(self.issuer):
+                for url in discovery_urls(self.internal_issuer):
                     try:
                         r = await h.get(url, headers={"Accept": "application/json"})
                     except httpx.HTTPError as e:
@@ -95,10 +114,12 @@ class BearerBase(IdentityProvider):
                     if r.status_code == 200:
                         doc = r.json()
                         if doc.get("issuer") and doc["issuer"].rstrip("/") != self.issuer:
-                            raise Unauthenticated(f"issuer metadata at {url} names a different issuer {doc['issuer']}")
+                            raise Unauthenticated(f"issuer metadata at {url} names a different issuer {doc['issuer']} "
+                                                  f"(expected {self.issuer}; pin the server's hostname or set identity.issuer)")
                         self._metadata, self._metadata_at = doc, time.monotonic()
                         return doc
             raise Unauthenticated(f"cannot discover authorization server metadata for {self.issuer}"
+                                  + (f" at {self.internal_issuer}" if self.internal_issuer != self.issuer else "")
                                   + (f": {last}" if last else ""))
 
     # ---- RFC 9728

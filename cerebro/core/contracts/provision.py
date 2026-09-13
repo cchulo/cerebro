@@ -42,6 +42,8 @@ class UnitSpec(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     secret_env: list[str] = Field(default_factory=list, description="secret names to inject as env vars")
     ports: list[PortSpec] = Field(default_factory=lambda: [PortSpec(port=8080)])
+    publish_port: int | None = Field(default=None, description="host loopback port compose publishes ports[0] on "
+                                     "(an auth server browsers must reach); kubernetes ignores it (ClusterIP + Ingress)")
     volumes: list[VolumeSpec] = Field(default_factory=list)
     resources: dict[str, str] = Field(default_factory=dict)
     health_path: str | None = "/health"
