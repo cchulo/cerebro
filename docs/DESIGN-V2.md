@@ -204,7 +204,17 @@ branch currently checked out and needs a local ref, and worktrees get their own 
 split the databases. So the indexer for a unit works in one checkout: for each configured branch, `git checkout`,
 `tokensave branch add`, `tokensave sync`; then it returns to the default branch, which is the one the server binds to
 at startup. The gateway passes `graph_root` and `graph_branch` on every call; whether every graph tool honours
-`graph_branch` (the README documents it as a general query selector) is confirmed in the pilot. TokenSave has no regex text search (its own hook passes regex patterns through to grep), so the unit
+`graph_branch` (the README documents it as a general query selector) is confirmed in the pilot.
+
+*Pilot findings (2026-09-13, tokensave 7.12.1, real binary; details in `cerebro/bridge/workspace.py` and
+`images/code-unit/README.md`):* 53 of the 74 read-only tools take `graph_root` / `graph_branch`; the 21 that do not
+(the three `tokensave_branch_*` tools, VCS, diagnostics, runtime, dependencies, memory) only answer about the served
+project. `graph_root` may not name the served project and `graph_branch` is refused for it. So the unit image
+serves an empty initialised project at `/workspace/.cerebro-root` and reaches every repository, on any tracked
+branch, through the selectors; those opens are read-only, which lets the index job run while the bridge serves.
+The bridge exposes the 53 selector tools plus its own `grep` and `unit_info`; the `tokensave_branch_*` tools are
+not exposed (they would only see the empty root). There is no daemon or shared-server mode (removed in 6.0.0), so
+the bridge owns one `tokensave serve` process. TokenSave has no regex text search (its own hook passes regex patterns through to grep), so the unit
 image bundles ripgrep behind a `grep` tool to satisfy the `search` capability. CodeGraphContext has neither branches
 nor sibling roots: under `unit: repo` it is one FalkorDB per repo, and `branch` is rejected as unsupported by its
 capability manifest.
