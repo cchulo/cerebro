@@ -147,9 +147,14 @@ TokenSave pilot passes the smoke test.
 ### Documents
 
 `DocumentIndex` with three adapters: **LightRAG** (port of `ingest/lightrag.py`, all the quirks stay inside the
-adapter), **pgvector retrieval-only** (chunks + embeddings in the shared Postgres, no extraction, cheap ingest, the
-default for a first deployment), LazyGraphRAG later. The ingest engine's `Batch` becomes the contract's input; the
-adapter decides ordering and idle-waits.
+adapter), **pgvector retrieval-only** (chunks + embeddings in the shared Postgres, no extraction, cheap ingest),
+LazyGraphRAG or another GraphRAG later. The ingest engine's `Batch` becomes the contract's input; the adapter decides
+ordering and idle-waits.
+
+**Decision (2026-09-13): LightRAG stays the default.** It is what the PoC verified, and the contract is what makes
+the choice cheap to revisit: a GraphRAG or retrieval-only implementation replaces it with one line of config, no
+gateway or ingest change. The pgvector adapter is still built, as the proof that the contract holds and as the
+low-cost option for installs without a capable model endpoint.
 
 ### Memory
 
@@ -396,7 +401,7 @@ for each vertical slice below.
 1. **Skeleton.** The layout in section 9, the `core` contracts, the `cerebro.yaml` schema with loader and JSON schema,
    a contract-test harness every adapter must pass.
 2. **Empty gateway.** `identity.mode: none` and `static`, `whoami` and `list_scopes`, no engines. A runnable product.
-3. **Docs slice.** pgvector retrieval-only adapter, the ingest engine with Postgres sync state, the source plugins
+3. **Docs slice.** LightRAG adapter ported from `poc`, the ingest engine with Postgres sync state, the source plugins
    copied from `poc`. First end-to-end query.
 4. **Memory slice.** Hindsight adapter.
 5. **Identity.** `bearer_jwt` with RFC 9728 metadata and the 401 challenge; the `builtin` server as a provisioned
@@ -404,7 +409,8 @@ for each vertical slice below.
 6. **Code slice.** `CodeIntelligence`, the bridge image with the capability manifest, CodeGraphContext first because it
    is known good, then TokenSave; the compose provisioner.
 7. **Kubernetes provisioner.** On-demand `ensure()`, idle TTL, scale to zero.
-8. **Ports.** LightRAG and Sourcebot adapters from `poc`; demo scripts retargeted at `cerebro.yaml`.
+8. **Second adapters.** pgvector retrieval-only docs adapter (proves the contract), Sourcebot adapter from `poc`;
+   demo scripts retargeted at `cerebro.yaml`.
 9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `poc`
    README gets a pointer to `main`.
 
@@ -414,6 +420,6 @@ for each vertical slice below.
   branches per repository (section 5).
 - ~~Builtin authorization server~~ **Decided 2026-09-13**: Keycloak first (section 6); RFC 8707 and CIMD verified
   during the identity slice, CIMD-to-DCR shim in the gateway if needed.
-- **Docs default engine**: keep LightRAG, or make retrieval-only the default and LightRAG the opt-in? The latter makes
-  first deployments cheap and matches what you asked for earlier.
+- ~~Docs default engine~~ **Decided 2026-09-13**: LightRAG stays the default; GraphRAG or retrieval-only are
+  drop-in replacements through `DocumentIndex` (section 4).
 - **Language of the Kubernetes provisioner**: Python `kopf` first, Go later, or Go from the start?
