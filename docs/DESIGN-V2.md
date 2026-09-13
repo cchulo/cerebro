@@ -1,6 +1,6 @@
 # Cerebro v2: everything behind the gateway is a plugin
 
-Status: **proposal, all four open decisions made 2026-09-13** (section 11). Nothing below is implemented. The v1 stack lives on as the `v1` branch; `main` is v2 from here (section 10).
+Status: **implemented on `main` as of 2026-09-13** (decisions in section 11; the pgvector docs adapter of step 8 is the one item still open). What was built is documented in [../README.md](../README.md), [ARCHITECTURE.md](ARCHITECTURE.md), [SETUP.md](SETUP.md), [ACCESS-CONTROL.md](ACCESS-CONTROL.md), [IDENTITY.md](IDENTITY.md), [CONNECT.md](CONNECT.md), [PLUGINS.md](PLUGINS.md) and [ENGINES.md](ENGINES.md). The body below is the design as decided and is kept as history; the v1 stack lives on as the `v1` branch (section 10).
 
 The one-line version: keep the gateway as the single MCP endpoint and the *scope* as the isolation unit, but turn every
 engine (docs index, code intelligence, memory, identity, inference, provisioning) into an implementation of a small
