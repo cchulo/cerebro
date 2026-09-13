@@ -23,7 +23,7 @@ import datetime, json, logging
 from typing import Any
 import httpx
 from cerebro.core import CodeUnit, Health, code_units
-from cerebro.core.contracts.code import Capabilities, CodeIntelligence, SearchHit, ToolInfo, ToolResult
+from cerebro.core.contracts.code import Capabilities, CodeIntelligence, SearchHit, SearchResult, ToolInfo, ToolResult
 from cerebro.core.contracts.provision import JobSpec, PortSpec, UnitSpec, VolumeSpec
 from cerebro.core.types import Forbidden, Unsupported
 from cerebro.bridge.workspace import REPOS_ENV, UNIT_ENV, repos_env_value
@@ -92,7 +92,7 @@ class Adapter(CodeIntelligence):
 
     # ------------------------------------------------------------------ contract
     async def search(self, unit: CodeUnit, query: str, *, repos: list[str] | None = None, branch: str | None = None,
-                     regex: bool = False, max_results: int = 20) -> list[SearchHit]:
+                     regex: bool = False, max_results: int = 20) -> SearchResult:
         caps = await self.capabilities(unit)
         if not caps.search:
             raise Unsupported(f"unit {unit.name} has no search capability")
@@ -102,7 +102,7 @@ class Adapter(CodeIntelligence):
         if repos is not None:
             wanted = [r for r in allowed if r in set(repos)]              # intersection: never widens
             if not wanted:
-                return []
+                return SearchResult()
         else:
             wanted = allowed
         res = await self._call_tool(unit, "grep", {"query": query, "repos": wanted, "branch": branch, "regex": regex,
@@ -114,12 +114,15 @@ class Adapter(CodeIntelligence):
         for h in data.get("hits", []):
             if h.get("repository") in allowed:                           # belt and braces: only this unit's repos
                 hits.append(SearchHit(**{k: h.get(k) for k in ("repository", "path", "line", "content", "language", "branch")}))
-        errors = [e for e in data.get("errors", []) if isinstance(e, str)]
-        if errors and not hits:          # a branch that is not indexed, a repo not checked out: say so, never an empty answer
-            raise RuntimeError("; ".join(errors)[:600])
+        # the bridge names the repository in every diagnostic ("<repo>: not checked out yet", "branch 'x' is not
+        # indexed for <repo>"); a branch that is not indexed or a repo not cloned is reported, never an empty answer
+        errors = {}
+        for e in data.get("errors", []):
+            if isinstance(e, str):
+                errors[_error_repo(e, wanted)] = e[:300]
         if errors:
-            log.info("grep on %s: partial: %s", unit.name, "; ".join(errors)[:300])
-        return hits
+            log.info("grep on %s: %s: %s", unit.name, "partial" if hits else "no hits", "; ".join(errors.values())[:300])
+        return SearchResult(hits=hits, errors=errors)
 
     async def call(self, unit: CodeUnit, tool: str, args: dict[str, Any] | None = None, *,
                    branch: str | None = None) -> ToolResult:
@@ -184,6 +187,12 @@ class Adapter(CodeIntelligence):
                 volumes=[self._volume(unit)], schedule=schedule, scope=unit.scope, depends_on=[],
                 labels={"cerebro.io/engine": "tokensave", "cerebro.io/unit": unit.name}))
         return out
+
+
+def _error_repo(message: str, repos: list[str]) -> str:
+    """The repository a bridge diagnostic is about (the longest name it mentions), or "*" for the unit itself."""
+    named = [r for r in repos if r in message]
+    return max(named, key=len) if named else "*"
 
 
 def _text(content: list[Any]) -> str:

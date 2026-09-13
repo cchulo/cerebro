@@ -2,7 +2,7 @@
 from .identity import RequestInfo, IdentityProvider, AuthorizationServer
 from .policy import AccessPolicy
 from .docs import DocumentText, Batch, ApplyReport, QueryOptions, Reference, DocAnswer, DocumentIndex
-from .code import ToolInfo, Capabilities, ToolResult, SearchHit, CodeIntelligence
+from .code import ToolInfo, Capabilities, ToolResult, SearchHit, SearchResult, CodeIntelligence
 from .memory import Memory, RecallResult, RetainResult, ReflectResult, MemoryStore
 from .inference import ChatMessage, Inference
 from .provision import PortSpec, VolumeSpec, UnitSpec, JobSpec, UnitRef, Endpoint, UnitStatus, Provisioner
@@ -12,7 +12,7 @@ from .sources import Document, ScopeContext, Source, LiveSource, McpUpstream, Pl
 __all__ = [
     "RequestInfo", "IdentityProvider", "AuthorizationServer", "AccessPolicy",
     "DocumentText", "Batch", "ApplyReport", "QueryOptions", "Reference", "DocAnswer", "DocumentIndex",
-    "ToolInfo", "Capabilities", "ToolResult", "SearchHit", "CodeIntelligence",
+    "ToolInfo", "Capabilities", "ToolResult", "SearchHit", "SearchResult", "CodeIntelligence",
     "Memory", "RecallResult", "RetainResult", "ReflectResult", "MemoryStore",
     "ChatMessage", "Inference",
     "PortSpec", "VolumeSpec", "UnitSpec", "JobSpec", "UnitRef", "Endpoint", "UnitStatus", "Provisioner",

@@ -1,9 +1,9 @@
 """CodeIntelligence: search and graph over the repositories of ONE unit.
 
 A unit is a scope's repos side by side, or one repository (cerebro.core.units). Adapters expose two capabilities,
-`search` (text/symbol hits with file and line) and `graph` (engine tools proxied by name), and declare which they
-have through `capabilities()`. Branch support is a capability too: engines without it reject a `branch` argument
-with cerebro.core.types.Unsupported.
+`search` (text/symbol hits with file and line, plus per-repository diagnostics in SearchResult.errors) and `graph`
+(engine tools proxied by name), and declare which they have through `capabilities()`. Branch support is a
+capability too: engines without it reject a `branch` argument with cerebro.core.types.Unsupported.
 """
 from __future__ import annotations
 from abc import abstractmethod
@@ -44,6 +44,20 @@ class SearchHit(BaseModel):
     branch: str | None = None
 
 
+class SearchResult(BaseModel):
+    """What one unit answered: the hits, plus per-repository diagnostics for the repositories that could not be
+    searched (not checked out yet, branch not indexed). Key "*" is an error of the unit as a whole. A unit that
+    answers nothing must say why here rather than return an empty list."""
+    hits: list[SearchHit] = Field(default_factory=list)
+    errors: dict[str, str] = Field(default_factory=dict)
+
+    def __iter__(self):                    # iterating a result yields its hits
+        return iter(self.hits)
+
+    def __len__(self) -> int:
+        return len(self.hits)
+
+
 class ToolResult(BaseModel):
     unit: str
     tool: str
@@ -60,8 +74,9 @@ class CodeIntelligence(Adapter):
 
     @abstractmethod
     async def search(self, unit: CodeUnit, query: str, *, repos: list[str] | None = None, branch: str | None = None,
-                     regex: bool = False, max_results: int = 20) -> list[SearchHit]:
-        """Text / symbol search inside the unit; `repos` narrows to those repository names, never widens."""
+                     regex: bool = False, max_results: int = 20) -> SearchResult:
+        """Text / symbol search inside the unit; `repos` narrows to those repository names, never widens.
+        Repositories that could not be searched are reported in SearchResult.errors, not silently skipped."""
 
     @abstractmethod
     async def call(self, unit: CodeUnit, tool: str, args: dict[str, Any] | None = None, *,

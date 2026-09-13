@@ -4,7 +4,7 @@ import json
 import httpx, pytest, respx
 from cerebro.core import AdapterContext, CodeUnit, Health, StaticLocator, load_config
 from cerebro.core.config import RepoSpec
-from cerebro.core.contracts.code import Capabilities, ToolResult
+from cerebro.core.contracts.code import Capabilities, SearchResult, ToolResult
 from cerebro.core.types import Forbidden, Unsupported
 from cerebro.core.registry import build, resolve
 from cerebro.adapters.code.tokensave import Adapter
@@ -53,19 +53,21 @@ class TestTokenSaveContract(CodeIntelligenceContract):
 # ----------------------------------------------------------------------------- end to end through the bridge
 async def test_search_maps_grep_hits(live, unit):
     adapter, _, _ = live
-    hits = await adapter.search(unit, "def main", max_results=10)
-    assert {(h.repository, h.path, h.line) for h in hits} == {("github.com/pallets/click", "src/click/core.py", 1),
-                                                              ("github.com/pallets/flask", "src/flask/cli.py", 1)}
-    assert all(h.language == "python" and h.branch is None for h in hits)
-    hits = await adapter.search(unit, "only_on_stable", branch="stable")
-    assert [(h.repository, h.branch) for h in hits] == [("github.com/pallets/flask", "stable")]
-    hits = await adapter.search(unit, r"def (main|helper)", regex=True, repos=["github.com/pallets/flask", "github.com/nope/x"])
-    assert [h.line for h in hits] == [1, 5] and all(h.repository == "github.com/pallets/flask" for h in hits)
-    assert await adapter.search(unit, "def", repos=["github.com/nope/x"]) == []
-    with pytest.raises(RuntimeError, match="not indexed"):                # an untracked branch is an error, not an empty answer
-        await adapter.search(unit, "def", branch="no-such-branch")
-    hits = await adapter.search(unit, "def main", branch="stable")           # click has no stable: partial, flask still answers
-    assert [h.repository for h in hits] == ["github.com/pallets/flask"]
+    res = await adapter.search(unit, "def main", max_results=10)
+    assert {(h.repository, h.path, h.line) for h in res.hits} == {("github.com/pallets/click", "src/click/core.py", 1),
+                                                                  ("github.com/pallets/flask", "src/flask/cli.py", 1)}
+    assert all(h.language == "python" and h.branch is None for h in res.hits) and res.errors == {}
+    res = await adapter.search(unit, "only_on_stable", branch="stable")
+    assert [(h.repository, h.branch) for h in res.hits] == [("github.com/pallets/flask", "stable")]
+    assert set(res.errors) == {"github.com/pallets/click"} and "not indexed" in res.errors["github.com/pallets/click"]
+    res = await adapter.search(unit, r"def (main|helper)", regex=True, repos=["github.com/pallets/flask", "github.com/nope/x"])
+    assert [h.line for h in res.hits] == [1, 5] and all(h.repository == "github.com/pallets/flask" for h in res.hits)
+    assert await adapter.search(unit, "def", repos=["github.com/nope/x"]) == SearchResult()
+    res = await adapter.search(unit, "def", branch="no-such-branch")      # an untracked branch is a diagnostic per repo, never an empty answer
+    assert res.hits == [] and set(res.errors) == {"github.com/pallets/click", "github.com/pallets/flask"}
+    assert all("not indexed" in e for e in res.errors.values())
+    res = await adapter.search(unit, "def main", branch="stable")           # click has no stable: partial, flask still answers
+    assert [h.repository for h in res.hits] == ["github.com/pallets/flask"] and list(res.errors) == ["github.com/pallets/click"]
 
 
 async def test_call_proxies_with_repo_and_branch(live, unit):

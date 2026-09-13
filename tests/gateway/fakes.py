@@ -4,7 +4,7 @@ second-pass filters are exercised."""
 from typing import Any
 from cerebro.core import Health, CodeUnit
 from cerebro.core.contracts import (DocumentIndex, Batch, ApplyReport, QueryOptions, DocAnswer, Reference,
-                                    CodeIntelligence, Capabilities, ToolInfo, ToolResult, SearchHit,
+                                    CodeIntelligence, Capabilities, ToolInfo, ToolResult, SearchHit, SearchResult,
                                     MemoryStore, RecallResult, RetainResult, ReflectResult, Memory,
                                     LiveSource, Plugin)
 from cerebro.core.types import Forbidden, Unsupported
@@ -39,9 +39,11 @@ class FakeDocs(DocumentIndex):
 
 class FakeCode(CodeIntelligence):
     """One hit per repository the gateway asks for, plus a LEAKED hit from a repository outside the unit that the
-    gateway must drop. No branch support, so `branch` raises Unsupported. Graph tools: `stats` only."""
+    gateway must drop. No branch support, so `branch` raises Unsupported. Graph tools: `stats` only. Repositories
+    listed in `broken` answer a per-repo error instead of a hit."""
     name = "fake-code"
     LEAK = "github.com/pallets/werkzeug"
+    broken: dict[str, str] = {}
 
     def __init__(self, options=None, ctx=None):
         super().__init__(options, ctx)
@@ -57,9 +59,9 @@ class FakeCode(CodeIntelligence):
         if branch:
             raise Unsupported("fake engine keeps no per-branch index")
         names = repos or [r.name for r in unit.repos]
-        hits = [SearchHit(repository=n, path="src/main.py", line=1, content=f"{query} in {n}") for n in names]
+        hits = [SearchHit(repository=n, path="src/main.py", line=1, content=f"{query} in {n}") for n in names if n not in self.broken]
         hits.append(SearchHit(repository=self.LEAK, path="leak.py", line=9, content="should never leave the gateway"))
-        return hits
+        return SearchResult(hits=hits, errors={n: self.broken[n] for n in names if n in self.broken})
 
     async def call(self, unit, tool, args=None, *, branch=None) -> ToolResult:
         self.calls.append((unit.name, tool, args or {}))

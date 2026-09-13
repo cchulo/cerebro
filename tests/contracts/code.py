@@ -1,7 +1,7 @@
 import pytest
 from cerebro.core import Health, CodeUnit
 from cerebro.core.config import RepoSpec
-from cerebro.core.contracts import CodeIntelligence, Capabilities, ToolResult, SearchHit
+from cerebro.core.contracts import CodeIntelligence, Capabilities, ToolResult, SearchHit, SearchResult
 from cerebro.core.types import Unsupported, Forbidden
 
 
@@ -31,16 +31,19 @@ class CodeIntelligenceContract:
         c = await adapter.capabilities(unit)
         if not c.search:
             pytest.skip("no search capability")
-        hits = await adapter.search(unit, "def main", max_results=5)
+        res = await adapter.search(unit, "def main", max_results=5)
         allowed = {r.name for r in unit.repos}
-        assert all(isinstance(h, SearchHit) and h.repository in allowed for h in hits)
+        assert isinstance(res, SearchResult) and all(isinstance(h, SearchHit) and h.repository in allowed for h in res.hits)
+        assert set(res.errors) <= allowed | {"*"}, "diagnostics are keyed by repository of the unit, or '*'"
 
     async def test_search_repo_filter_never_widens(self, adapter, unit):
         c = await adapter.capabilities(unit)
         if not c.search:
             pytest.skip("no search capability")
-        hits = await adapter.search(unit, "def main", repos=["github.com/pallets/click"], max_results=5)
-        assert all(h.repository == "github.com/pallets/click" for h in hits)
+        res = await adapter.search(unit, "def main", repos=["github.com/pallets/click"], max_results=5)
+        assert all(h.repository == "github.com/pallets/click" for h in res.hits)
+        assert set(res.errors) <= {"github.com/pallets/click", "*"}
+        assert (await adapter.search(unit, "def main", repos=["github.com/nobody/else"])) == SearchResult()
 
     async def test_unknown_tool_is_forbidden(self, adapter, unit):
         c = await adapter.capabilities(unit)

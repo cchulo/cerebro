@@ -43,9 +43,12 @@ return `UnitSpec`s from `units()` if the engine is a workload, and pass `tests/c
 ## CodeIntelligence
 
 `capabilities(unit) -> Capabilities` (`search`, `graph`, `branches`, `multi_root`, the read-only `tools`),
-`search(unit, query, repos, branch, regex, max_results) -> [SearchHit]`, `call(unit, tool, args, branch) -> ToolResult`,
-`health(unit)`. A unit is a scope's repositories side by side or one repository (`cerebro.core.units`). `repos`
-narrows, never widens; a `branch` on an engine without the capability is `Unsupported`.
+`search(unit, query, repos, branch, regex, max_results) -> SearchResult` (`hits: [SearchHit]` plus `errors:
+{repository: message}` for repositories that could not be searched, `"*"` for the unit itself), `call(unit, tool,
+args, branch) -> ToolResult`, `health(unit)`. A unit is a scope's repositories side by side or one repository
+(`cerebro.core.units`). `repos` narrows, never widens; a `branch` on an engine without the capability is
+`Unsupported`; a repository that is not indexed yet or a branch that is not tracked is a diagnostic in `errors`,
+never a silent empty answer.
 
 **TokenSave** (`type: tokensave`, the only implementation; `7.12.1`, pinned and SHA256-checked in
 `images/code-unit/Dockerfile`). The adapter never runs TokenSave itself: it talks to the unit's **bridge**

@@ -409,7 +409,9 @@ def register_tools(gw: Gateway) -> None:
                           regex: bool = False, max_results: int = 20) -> dict:
         """Search source code across the repositories you can read. Fans out to every code unit that serves one of
         your repositories and merges the hits. `branch` selects a tracked branch on engines that keep per-branch
-        indexes (an error on engines that do not); regex=true treats the query as a regular expression."""
+        indexes (an error on engines that do not); regex=true treats the query as a regular expression.
+        Repositories that could not be searched (not indexed yet, branch not tracked) are listed under
+        errors[unit][repository]; a unit that failed as a whole under errors[unit]["*"]."""
         g = gw.grants_of(ctx)
         code = gw.need_code()
         repos = g.repos_in(g.check_scopes(scopes))
@@ -421,14 +423,16 @@ def register_tools(gw: Gateway) -> None:
             code.search(unit, query, repos=[r.name for r in mine], branch=branch, regex=regex, max_results=max_results)
             for unit, mine in groups])
         hits: list[dict] = []
-        errors: dict[str, str] = {}
+        errors: dict[str, dict[str, str]] = {}              # errors[unit][repo]; "*" is the unit as a whole
         for (unit, _), res in zip(groups, results):
             if isinstance(res, Unsupported):
                 raise Unsupported(f"{unit.name}: {res}")
             if isinstance(res, BaseException):
-                errors[unit.name] = _error(res)
+                errors[unit.name] = {"*": _error(res)}
                 continue
-            for h in res:                                   # belt and braces: nothing outside the caller's repos leaves
+            if res.errors:
+                errors[unit.name] = {r: m for r, m in res.errors.items() if r == "*" or r.lower() in allowed}
+            for h in res.hits:                              # belt and braces: nothing outside the caller's repos leaves
                 if isinstance(h, SearchHit) and h.repository.lower() in allowed:
                     hits.append({**h.model_dump(exclude_none=True), "unit": unit.name})
         out = {"query": query, "units": [u.name for u, _ in groups], "hits": hits[:max_results]}

@@ -88,7 +88,8 @@ agent is a service principal with `cerebro:code.read` and `cerebro:docs.read`, n
    caller does not hold (`Forbidden`); omitting it means all of the caller's scopes.
 4. **Unit gating**: `code_tool` and `list_code_units` only see units of the caller's scopes; a unit outside them is
    `Forbidden`. `search_code` fans out only to units that serve one of the caller's repositories and asks each for
-   the caller's repositories in it (`repos` narrows, never widens).
+   the caller's repositories in it (`repos` narrows, never widens); what a unit could not search comes back under
+   `errors[unit][repository]` (`"*"` when the unit failed as a whole), filtered to the caller's repositories too.
 5. **Second-pass repository filter**: every hit returned by a code unit is dropped unless its `repository` is in the
    caller's repository list; the bridge applies the same rule inside the unit.
 6. **Bank gating**: `recall`, `retain`, `reflect` default to the personal bank; a named bank must be in the caller's

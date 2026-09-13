@@ -244,6 +244,26 @@ async def test_search_code_fans_out_per_unit_and_drops_foreign_hits(gateway):
         assert not err and [h["repository"] for h in out["hits"]] == ["github.com/pallets/jinja"]
 
 
+async def test_search_code_reports_per_repository_diagnostics(make_config, make_ctx):
+    code = FakeCode()
+    code.broken = {"github.com/pallets/flask": "branch 'stable' is not indexed for github.com/pallets/flask",
+                   FakeCode.LEAK: "should never be shown to a caller without werkzeug"}
+    gw = make_gateway(make_config, make_ctx, code=code)
+    async with session(gw, "tok-alice") as s:                          # alice: public only (click, flask)
+        err, out = await call(s, "search_code", query="def main")
+        assert not err and [h["repository"] for h in out["hits"]] == ["github.com/pallets/click"]
+        assert out["errors"] == {"code-public": {"github.com/pallets/flask": "branch 'stable' is not indexed for github.com/pallets/flask"}}, \
+            "errors[unit][repo]; a foreign repository's diagnostic never leaves the gateway"
+
+    class Dead(FakeCode):
+        async def search(self, unit, query, **kw):
+            raise RuntimeError("bridge unreachable")
+    gw = make_gateway(make_config, make_ctx, code=Dead())
+    async with session(gw, "tok-alice") as s:
+        err, out = await call(s, "search_code", query="def main")
+        assert not err and out["hits"] == [] and out["errors"] == {"code-public": {"*": "RuntimeError: bridge unreachable"}}
+
+
 async def test_code_units_and_code_tool_are_limited_to_the_callers_scopes(gateway):
     async with session(gateway, "tok-alice") as s:
         err, out = await call(s, "list_code_units")
