@@ -4,7 +4,8 @@
     cerebro ingest sync   [source] [--scope s ...] [--filter json]       one sync now, report as JSON
     cerebro ingest check  <scope> <source> [--filter json] [--limit n] [--full]   list what a plugin yields, no index
 
-All take -c/--config (default $CEREBRO_CONFIG or cerebro.yaml).
+All take -c/--config (default $CEREBRO_CONFIG or cerebro.yaml), before or after the subcommand like the other
+components (`cerebro ingest sync -c cerebro.yaml` and `cerebro ingest -c cerebro.yaml sync` are the same).
 """
 from __future__ import annotations
 import argparse, json, logging, os, sys
@@ -13,7 +14,7 @@ from .runtime import Ingest
 
 
 def _ingest(args) -> Ingest:
-    return Ingest.from_config(load_config(args.config))
+    return Ingest.from_config(load_config(args.config_after or args.config))
 
 
 def _serve(args) -> int:
@@ -41,19 +42,21 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     logging.basicConfig(level=os.environ.get("CEREBRO_LOG_LEVEL", "INFO"))
     p = argparse.ArgumentParser(prog="cerebro ingest", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("-c", "--config", default=os.environ.get("CEREBRO_CONFIG", "cerebro.yaml"))
+    p.add_argument("-c", "--config", default=os.environ.get("CEREBRO_CONFIG", "cerebro.yaml"), help="cerebro.yaml (also accepted after the subcommand)")
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("serve", help="run the ingest service")
+    common = argparse.ArgumentParser(add_help=False)          # the same -c after the subcommand, as every other component
+    common.add_argument("-c", "--config", dest="config_after", default=None, help="cerebro.yaml (default: $CEREBRO_CONFIG or ./cerebro.yaml)")
+    s = sub.add_parser("serve", parents=[common], help="run the ingest service")
     s.add_argument("--host", default=os.environ.get("INGEST_HOST", "0.0.0.0"))
     s.add_argument("--port", type=int, default=int(os.environ.get("INGEST_PORT", "8080")))
     s.add_argument("--no-scheduler", action="store_true", help="webhooks and /sync only, no cron")
     s.set_defaults(fn=_serve)
-    y = sub.add_parser("sync", help="sync now")
+    y = sub.add_parser("sync", parents=[common], help="sync now")
     y.add_argument("source", nargs="?", default=None, help="one plugin (default: every plugin)")
     y.add_argument("--scope", action="append", help="limit to a scope (repeatable)")
     y.add_argument("--filter", default=None, help="plugin filter as JSON, as a webhook would send")
     y.set_defaults(fn=_sync)
-    c = sub.add_parser("check", help="list what a plugin yields for a scope, without an index")
+    c = sub.add_parser("check", parents=[common], help="list what a plugin yields for a scope, without an index")
     c.add_argument("scope"); c.add_argument("source")
     c.add_argument("--filter", default=None); c.add_argument("--limit", type=int, default=20)
     c.add_argument("--full", action="store_true", help="print full text instead of a preview")

@@ -46,3 +46,7 @@ def test_cli_sync_and_check(tmp_path, docs_dir, capsys, monkeypatch):
     assert main(["-c", str(p), "check", "public", "files", "--limit", "1"]) == 0
     assert "4 documents" in capsys.readouterr().out
     assert main(["-c", str(p), "check", "public", "git"]) == 1
+    assert main(["check", "public", "files", "-c", str(p), "--limit", "1"]) == 0, "-c after the subcommand, like every other component"
+    assert "4 documents" in capsys.readouterr().out
+    assert cerebro_main(["ingest", "sync", "files", "-c", str(p)]) == 0
+    assert json.loads(capsys.readouterr().out)["public/files"] == {"changed": 0, "removed": 0}

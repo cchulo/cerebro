@@ -190,7 +190,7 @@ cerebro ingest -c cerebro.yaml sync confluence --scope payments --filter '{"spac
 cerebro ingest -c cerebro.yaml check payments confluence --limit 5    # what a plugin yields, no index touched
 ```
 
-Note the position of `-c`: for `cerebro ingest` it precedes the subcommand. From the host, unit names such as
+`-c` goes before or after the subcommand, as with every other component. From the host, unit names such as
 `docs-payments` do not resolve, so run these inside the container:
 `docker compose -p cerebro -f deploy/generated/compose.yaml exec ingest cerebro ingest sync` (the image sets
 `CEREBRO_CONFIG`). Only changed documents are sent; LightRAG extracts in the background, which is the slow part
