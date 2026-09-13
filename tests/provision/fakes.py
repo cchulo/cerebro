@@ -67,7 +67,7 @@ class FakeAuth(Adapter):
 
     def units(self):
         return [UnitSpec(name="auth", role="auth", image="quay.io/keycloak/keycloak:26.0", args=["start-dev"],
-                         ports=[PortSpec(port=8080)], health_path="/health/ready",
+                         ports=[PortSpec(port=8080)], publish_port=8180, health_path="/health/ready",
                          env={"KC_DB": "postgres", "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
                               "KC_DB_USERNAME": "cerebro", "KC_DB_PASSWORD": "${POSTGRES_PASSWORD}",
                               "KC_BOOTSTRAP_ADMIN_PASSWORD": "${CEREBRO_AUTH_ADMIN_PASSWORD}"},

@@ -14,8 +14,9 @@ rendered file never holds a value. Run `docker compose` with that env file (the 
 Builds: `UnitSpec.build` names the directory holding the Dockerfile (images/gateway); the context is the repository
 root, because the Dockerfiles COPY pyproject.toml / cerebro / plugins from there.
 
-Ports: only the gateway is published (gateway.host:gateway.port, 127.0.0.1 by default; identity.mode none without
-allow_remote is published on 127.0.0.1 whatever gateway.host says, since that mode has no token). Engines, Postgres,
+Ports: the gateway is published (gateway.host:gateway.port, 127.0.0.1 by default; identity.mode none without
+allow_remote is published on 127.0.0.1 whatever gateway.host says, since that mode has no token), and a unit with
+`publish_port` (the builtin auth server, so a browser can log in) on 127.0.0.1:<publish_port>. Engines, Postgres,
 Ollama and MCP upstreams are reachable on the compose network only.
 
 Health checks: `health_cmd` becomes a CMD check; `health_path` becomes a CMD-SHELL check that tries curl, then wget,
@@ -160,6 +161,8 @@ class Adapter(Provisioner):
         if is_unit and spec.role == "gateway":
             host, port = self.gateway_bind
             svc["ports"] = [f"{host}:{port}:{spec.http_port}"]
+        elif is_unit and spec.publish_port:            # the auth server: browsers log in there, loopback only
+            svc["ports"] = [f"127.0.0.1:{spec.publish_port}:{spec.http_port}"]
         mounts = []
         for v in spec.volumes:
             key = volume_key(spec, v, unit_names)

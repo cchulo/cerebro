@@ -28,10 +28,11 @@ def rendered(example_config, tmp_path, monkeypatch):
     return adapter, files, yaml.safe_load(next(iter(files.values())))
 
 
-def test_only_the_gateway_publishes_a_port(rendered):
+def test_only_the_gateway_and_the_auth_server_publish_a_port(rendered):
     _, _, doc = rendered
     published = {n for n, s in doc["services"].items() if s.get("ports")}
-    assert published == {"gateway"} and doc["services"]["gateway"]["ports"] == ["127.0.0.1:8090:8090"]
+    assert published == {"gateway", "auth"} and doc["services"]["gateway"]["ports"] == ["127.0.0.1:8090:8090"]
+    assert doc["services"]["auth"]["ports"] == ["127.0.0.1:8180:8080"], "publish_port: browsers log in on the host's loopback"
     assert doc["services"]["gateway"]["environment"]["CEREBRO_TRUSTED_NETWORK"] == "1", "mode none: the bridge is the peer"
 
 
