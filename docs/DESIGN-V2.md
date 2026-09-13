@@ -140,9 +140,10 @@ Assessment:
 - **FalkorDB code-graph is the weakest candidate**: three languages, a Gemini default that would have to be re-routed
   through the org's inference endpoint, and an SSPL database. Keep it in the pilot list only if the org is Java/C# heavy.
 
-Recommendation: `CodeIntelligence` contract with `search` and `graph` capabilities; adapters for TokenSave (new,
-pilot first), CodeGraphContext (port), Sourcebot (port); default in `cerebro.yaml` stays CodeGraphContext until the
-TokenSave pilot passes the smoke test.
+**Decision (2026-09-13, revised): TokenSave is the only code engine in v2.** `CodeIntelligence` keeps its `search` and
+`graph` capabilities so another engine can be reintroduced by implementing the interface, but CodeGraphContext and
+Sourcebot are not ported; they stay on the `v1` branch as reference. `search` is served by ripgrep inside the
+TokenSave unit image.
 
 ### Documents
 
@@ -326,7 +327,7 @@ inference:                # the only outbound path for document and memory text
 
 engines:
   docs:   { type: lightrag, unit: scope, options: { max_async: 2, gleaning: 0, think: false } }
-  code:   { type: tokensave, unit: scope, idle_ttl: 2h }
+  code:   { type: tokensave, unit: scope, idle_ttl: 2h }     # the only code engine in v2
   memory: { type: hindsight, options: { reranker: local } }
 
 provisioning:
@@ -374,26 +375,20 @@ tools against the same unit endpoints, and adapters that are workloads never car
 ## 9. Repository layout
 
 ```
-cerebro.yaml                    the one config (example committed; real one gitignored)
-core/                           contracts, Principal, config schema — no engine imports
-gateway/                        MCP server: tools + fan-out + policy; imports core only
-ingest/                         sync engine; imports core only
-adapters/
-  identity/   oauth2_jwt.py oauth2_introspect.py trusted_headers.py static.py
-  docs/       lightrag/  pgvector/
-  code/       tokensave/  codegraphcontext/  sourcebot/       (each: adapter.py + unit template + image/)
-  memory/     hindsight/
-  inference/  ollama.py openai_compat.py
-  provision/  compose.py  kubernetes/
-  state/      json_file.py  postgres.py
+cerebro.example.yaml            the one config (copy to cerebro.yaml, which is gitignored)
+cerebro/core/                   contracts, Principal, config schema, registry, units — imports no engine
+cerebro/gateway/                MCP server: tools + fan-out + identity + policy; imports core only
+cerebro/ingest/                 sync engine; imports core only
+cerebro/adapters/<kind>/<name>  identity/ auth/ policy/ docs/ code/ memory/ inference/ provision/ state/
+cerebro/sdk/                    what plugins/*.py import (the v1 stack_plugins names)
 plugins/                        knowledge sources (Confluence, Backstage, git, files, Jama), unchanged contract
-deploy/                         hand-written base: postgres, redis, ollama, gateway, ingest
-scripts/                        up/down/status/demo/smoke, retargeted at cerebro.yaml
-tests/                          contract tests every adapter must pass, plus the smoke test
+images/                         Dockerfiles cerebro builds: gateway, ingest, code unit (TokenSave + ripgrep + bridge)
+deploy/                         hand-written base for compose / kubernetes; deploy/generated is rendered, gitignored
+tests/contracts/                the harness every adapter must pass; tests/<component>/ next to it
 ```
 
-Adapters are selected by `type:` and resolved through entry points (`cerebro.adapters.docs = lightrag = adapters.docs.lightrag:LightRAG`),
-so an out-of-tree adapter is a pip package, the same way the live loader already accepts `module:Class`.
+Adapters are selected by `type:` and resolved by convention (`cerebro.adapters.<kind>.<type>:Adapter`) or as
+`module:Class` for an out-of-tree pip package, so no shared registry file exists to conflict over.
 
 ## 10. Branches and build order
 
@@ -416,11 +411,11 @@ for each vertical slice below.
 4. **Memory slice.** Hindsight adapter.
 5. **Identity.** `bearer_jwt` with RFC 9728 metadata and the 401 challenge; the `builtin` server as a provisioned
    unit; `external` verified against the chosen authorization server. The smoke test gains a token mode.
-6. **Code slice.** `CodeIntelligence`, the bridge image with the capability manifest, CodeGraphContext first because it
-   is known good, then TokenSave; the compose provisioner.
+6. **Code slice.** `CodeIntelligence`, the unit image (TokenSave binary + ripgrep + stdio-to-HTTP bridge with the
+   capability manifest), the TokenSave adapter and indexer; the compose provisioner.
 7. **Kubernetes provisioner.** On-demand `ensure()`, idle TTL, scale to zero.
-8. **Second adapters.** pgvector retrieval-only docs adapter (proves the contract), Sourcebot adapter from `v1`;
-   demo scripts retargeted at `cerebro.yaml`.
+8. **Second adapters.** pgvector retrieval-only docs adapter (proves the contract); demo scripts retargeted at
+   `cerebro.yaml`.
 9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `v1`
    README gets a pointer to `main`.
 
@@ -428,6 +423,7 @@ for each vertical slice below.
 
 - ~~Unit granularity default~~ **Decided 2026-09-13**: configurable per engine and per scope (`scope` | `repo`),
   branches per repository (section 5).
+- **Code engine (revised 2026-09-13)**: TokenSave only; CodeGraphContext and Sourcebot are not ported (section 4).
 - ~~Builtin authorization server~~ **Decided 2026-09-13**: Keycloak first (section 6); RFC 8707 and CIMD verified
   during the identity slice, CIMD-to-DCR shim in the gateway if needed.
 - ~~Docs default engine~~ **Decided 2026-09-13**: LightRAG stays the default; GraphRAG or retrieval-only are
