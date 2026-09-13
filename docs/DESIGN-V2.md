@@ -169,10 +169,34 @@ engines:
     unit: scope                     # one index per scope (required for graph indexes)
   code:
     type: tokensave
-    unit: repo                      # or: scope  (repos as siblings in one pod)
+    unit: scope                     # default; a scope may override with code: { unit: repo }
     idle_ttl: 2h                    # scale to zero when unused; ensure() brings it back
     resources: { cpu: "1", memory: 2Gi, storage: 10Gi }
+
+scopes:
+  payments:
+    code:
+      unit: repo                    # this scope wants one workload per repository
+      repos:
+        - https://github.com/pallets/jinja.git                 # string = default branch only
+        - url: https://github.com/pallets/flask.git
+          branches: [main, "release/*", stable]                # tracked branches; globs resolved at index time
 ```
+
+**Decision (2026-09-13): unit granularity is configuration, not architecture.** `engines.code.unit` is `scope` or
+`repo`; a scope may override it; and branches are declared per repository. The gateway exposes `branch` as an
+optional argument on `search_code` and `code_graph`, defaulting to the repository's default branch.
+
+What TokenSave does with that, verified against its README (v7.3): multi-branch is opt-in per project
+(`tokensave branch add` while that branch is checked out; each tracked branch gets its own libSQL database copied
+from the nearest ancestor and synced only for the diff); every query takes `graph_root` (absolute root of an
+initialised project) and an optional `graph_branch` (must be a tracked branch); and three cross-branch tools exist
+(`tokensave_branch_search`, `tokensave_branch_diff`, `tokensave_branch_list`). So the indexer for a unit checks each
+configured branch out in a worktree and runs `branch add`; the gateway passes `graph_root` and `graph_branch` on
+every call. TokenSave has no regex text search (its own hook passes regex patterns through to grep), so the unit
+image bundles ripgrep behind a `grep` tool to satisfy the `search` capability. CodeGraphContext has neither branches
+nor sibling roots: under `unit: repo` it is one FalkorDB per repo, and `branch` is rejected as unsupported by its
+capability manifest.
 
 `Provisioner.ensure(spec)` is called by the gateway on first use of a unit and by the indexer on schedule. Two
 implementations:
@@ -382,8 +406,8 @@ for each vertical slice below.
 
 ## 11. Decisions I would like from you
 
-- **Unit granularity default**: per scope (fewer pods, cross-repo graph inside a scope) or per repo (finest
-  isolation, most pods)? I recommend per scope as the default with per-repo opt-in.
+- ~~Unit granularity default~~ **Decided 2026-09-13**: configurable per engine and per scope (`scope` | `repo`),
+  branches per repository (section 5).
 - **Builtin authorization server**: Keycloak, Authentik or Ory, verified against the CIMD / passkey / RFC 8707
   checklist in section 6 before the choice is final. If your org already runs an IdP, name it so the JWT adapter is
   verified against the real claim shape too.
