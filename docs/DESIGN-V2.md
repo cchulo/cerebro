@@ -1,6 +1,6 @@
 # Cerebro v2: everything behind the gateway is a plugin
 
-Status: **proposal, all four open decisions made 2026-09-13** (section 11). Nothing below is implemented. The v1 stack lives on as the `poc` branch; `main` is v2 from here (section 10).
+Status: **proposal, all four open decisions made 2026-09-13** (section 11). Nothing below is implemented. The v1 stack lives on as the `v1` branch; `main` is v2 from here (section 10).
 
 The one-line version: keep the gateway as the single MCP endpoint and the *scope* as the isolation unit, but turn every
 engine (docs index, code intelligence, memory, identity, inference, provisioning) into an implementation of a small
@@ -397,31 +397,31 @@ so an out-of-tree adapter is a pip package, the same way the live loader already
 
 ## 10. Branches and build order
 
-**Branching.** Today's `main` becomes the `poc` branch, frozen as the reference for the v1 stack: the demo, the
+**Branching.** Today's `main` becomes the `v1` branch, frozen as the reference for the v1 stack: the demo, the
 verified engine facts (README "Verified versions") and the access-control argument. Bug fixes only, and only if
-someone is running it. `main` continues as v2 from the same commit; nothing is rewritten, v2 replaces the tree
-commit by commit and v1 code is deleted when its replacement lands, not before. An orphan `main` is the alternative
-if a clean history is preferred; keeping it is recommended because the PoC's `git log` explains many engine quirks
+someone is running it. `main` continues as v2 from the same commit; nothing is rewritten, v1 code is removed in the first v2
+commit (the skeleton) so that `main` is unambiguously v2; ports read their sources from the `v1` branch (`git show v1:<path>`). An orphan `main` is the alternative
+if a clean history is preferred; keeping it is recommended because the v1 branch's `git log` explains many engine quirks
 that the adapters will inherit.
 
 Dropping the "every step keeps `make demo` working" constraint is the main reason to split the branches: v2 can be
-built contracts-first instead of being refactored out of the PoC. The PoC's smoke test is still the acceptance bar
+built contracts-first instead of being refactored out of v1. The v1 smoke test is still the acceptance bar
 for each vertical slice below.
 
 1. **Skeleton.** The layout in section 9, the `core` contracts, the `cerebro.yaml` schema with loader and JSON schema,
    a contract-test harness every adapter must pass.
 2. **Empty gateway.** `identity.mode: none` and `static`, `whoami` and `list_scopes`, no engines. A runnable product.
-3. **Docs slice.** LightRAG adapter ported from `poc`, the ingest engine with Postgres sync state, the source plugins
-   copied from `poc`. First end-to-end query.
+3. **Docs slice.** LightRAG adapter ported from `v1`, the ingest engine with Postgres sync state, the source plugins
+   copied from `v1`. First end-to-end query.
 4. **Memory slice.** Hindsight adapter.
 5. **Identity.** `bearer_jwt` with RFC 9728 metadata and the 401 challenge; the `builtin` server as a provisioned
    unit; `external` verified against the chosen authorization server. The smoke test gains a token mode.
 6. **Code slice.** `CodeIntelligence`, the bridge image with the capability manifest, CodeGraphContext first because it
    is known good, then TokenSave; the compose provisioner.
 7. **Kubernetes provisioner.** On-demand `ensure()`, idle TTL, scale to zero.
-8. **Second adapters.** pgvector retrieval-only docs adapter (proves the contract), Sourcebot adapter from `poc`;
+8. **Second adapters.** pgvector retrieval-only docs adapter (proves the contract), Sourcebot adapter from `v1`;
    demo scripts retargeted at `cerebro.yaml`.
-9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `poc`
+9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `v1`
    README gets a pointer to `main`.
 
 ## 11. Decisions
