@@ -1,6 +1,6 @@
 # Cerebro v2: everything behind the gateway is a plugin
 
-Status: **proposal**, 2026-09-13. Nothing below is implemented. The v1 stack lives on as the `poc` branch; `main` is v2 from here (section 10).
+Status: **proposal, all four open decisions made 2026-09-13** (section 11). Nothing below is implemented. The v1 stack lives on as the `poc` branch; `main` is v2 from here (section 10).
 
 The one-line version: keep the gateway as the single MCP endpoint and the *scope* as the isolation unit, but turn every
 engine (docs index, code intelligence, memory, identity, inference, provisioning) into an implementation of a small
@@ -358,6 +358,11 @@ would push toward Go or Rust are not throughput:
   Python `kopf` route works for a first version and is what I would start with
 - a per-unit sidecar that must be tiny and start in milliseconds (the stdio-to-HTTP bridge) is a good Go program
 
+**Decision (2026-09-13): the Kubernetes provisioner starts in Python with `kopf`.** Same language and repo as the
+gateway, it shares the `cerebro.yaml` schema and the adapters' unit templates directly, and it is the fastest path to
+an on-demand `ensure()` with idle TTL. A Go controller-runtime rewrite is warranted only if it grows into a real
+operator with CRDs and reconciliation at a scale hundreds of units do not reach.
+
 The wire contracts in section 3 are what keep the language choice reversible: a Go gateway would implement the same
 tools against the same unit endpoints, and adapters that are workloads never cared what the gateway is written in.
 
@@ -414,7 +419,7 @@ for each vertical slice below.
 9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `poc`
    README gets a pointer to `main`.
 
-## 11. Decisions I would like from you
+## 11. Decisions
 
 - ~~Unit granularity default~~ **Decided 2026-09-13**: configurable per engine and per scope (`scope` | `repo`),
   branches per repository (section 5).
@@ -422,4 +427,4 @@ for each vertical slice below.
   during the identity slice, CIMD-to-DCR shim in the gateway if needed.
 - ~~Docs default engine~~ **Decided 2026-09-13**: LightRAG stays the default; GraphRAG or retrieval-only are
   drop-in replacements through `DocumentIndex` (section 4).
-- **Language of the Kubernetes provisioner**: Python `kopf` first, Go later, or Go from the start?
+- ~~Language of the Kubernetes provisioner~~ **Decided 2026-09-13**: Python `kopf` first (section 8).
