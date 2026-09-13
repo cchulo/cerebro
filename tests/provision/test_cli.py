@@ -44,3 +44,13 @@ def test_unknown_unit_or_job_is_an_error(checkout):
     assert provision_cli._selected([], []) == []
     with pytest.raises(SystemExit, match="unknown unit"):
         provision_cli._selected([], ["x"])
+
+
+def test_env_file_feeds_config_interpolation(checkout, capsys):
+    cfg = yaml.safe_load((checkout / "cerebro.yaml").read_text())
+    cfg["identity"] = {"mode": "static", "tokens": {"${CEREBRO_TOKEN_ALICE}": {"subject": "alice"}}}
+    (checkout / "cerebro.yaml").write_text(yaml.safe_dump(cfg))
+    with pytest.raises(KeyError, match="CEREBRO_TOKEN_ALICE"):
+        provision_cli.main(["plan"])
+    (checkout / "secrets.env").write_text("CEREBRO_TOKEN_ALICE=tok-a\n")
+    assert provision_cli.main(["plan"]) == 0 and "unit gateway" in capsys.readouterr().out

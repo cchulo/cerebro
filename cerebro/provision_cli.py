@@ -10,10 +10,13 @@
 
 Every command takes -c/--config, --target (default: provisioning.target), --env-file (default secrets.env) and
 -o/--output (default deploy/generated). Secrets come from the env file at run time; nothing rendered contains them.
+The env file also feeds `${NAME}` interpolation of cerebro.yaml here (the process environment wins), so the
+CLI reads the config the way the units will.
 """
 from __future__ import annotations
 import argparse, asyncio, logging, os, pathlib, shutil, subprocess, sys
 from .core import AdapterContext, load_config, registry
+from .core.config import read_env_file
 from .core.contracts.provision import JobSpec, UnitRef, UnitSpec
 from .provision.plan import plan
 
@@ -21,7 +24,7 @@ log = logging.getLogger("cerebro.provision.cli")
 
 
 def build(args):
-    cfg = load_config(args.config)
+    cfg = load_config(args.config, env={**read_env_file(args.env_file), **os.environ})   # ${NAME} as the units see it
     ctx = AdapterContext(cfg)
     target = args.target or cfg.provisioning.target
     opts = {**cfg.provisioning.options, "output_dir": args.output, "env_file": args.env_file, "config_path": args.config}
