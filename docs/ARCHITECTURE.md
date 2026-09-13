@@ -57,7 +57,7 @@ flowchart LR
             direction TB
             GW["<b>MCP gateway</b><br/><small>whoami · list_scopes · query_docs · live_search · live_fetch<br/>search_code · list_code_units · code_tool · recall · retain · reflect</small>"]:::gateway
             ID["IdentityProvider<br/><small>bearer_jwt · bearer_introspect<br/>none · static · trusted_headers</small>"]:::port
-            POL["AccessPolicy<br/><small>groups -> scopes, repos, banks</small>"]:::port
+            POL["AccessPolicy<br/><small>groups → scopes, repos, banks</small>"]:::port
             PORTS["DocumentIndex · CodeIntelligence · MemoryStore<br/><small>adapters: lightrag · tokensave · hindsight</small>"]:::port
             GW --- ID --- POL --- PORTS
         end
@@ -81,7 +81,7 @@ flowchart LR
         subgraph INFRA[" Shared "]
             direction TB
             PG[("postgres<br/><small>pgvector · db per engine</small>")]:::infra
-            PROV["Provisioner<br/><small>compose | kubernetes · Locator · idle TTL</small>"]:::port
+            PROV["Provisioner<br/><small>compose / kubernetes · Locator · idle TTL</small>"]:::port
         end
     end
 
@@ -179,7 +179,7 @@ sequenceDiagram
     A->>K: authorization code + PKCE (client cerebro-mcp), scopes cerebro:*
     K-->>A: access token, aud = the gateway's resource id
     A->>G: whoami / list_scopes (bearer)
-    Note over G: bearer_jwt validates iss, aud, exp, signature (JWKS)<br/>policy: groups -> scopes, repos, banks
+    Note over G: bearer_jwt validates iss, aud, exp, signature (JWKS)<br/>policy: groups → scopes, repos, banks
 
     A->>G: recall("prior work on checkout deploys")
     G->>H: POST /v1/default/banks/user-alice/memories/recall
