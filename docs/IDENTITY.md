@@ -38,8 +38,8 @@ a gateway you run yourself behind something that needs another listen address; t
 `identity.allow_remote: true` is the explicit LAN option. It lifts the loopback rules and adds one: every request,
 loopback included (a same-host proxy cannot bypass it), must carry `Authorization: Bearer <value of the secret named
 identity.static_token_env>` (default `CEREBRO_TOKEN`); an empty secret is a 401, not an open door. `gateway.host`
-stays the publish address: leave it at `127.0.0.1` unless other machines on your network must reach the gateway,
-and then pair the wider interface with a strong token. Verified: 401 without the token, MCP `initialize` with it,
+stays the publish address: leave it at `127.0.0.1` unless another machine must reach the gateway, and then name that
+one interface (for example `192.168.1.10`) together with a strong token; `0.0.0.0` is never the right value. Verified: 401 without the token, MCP `initialize` with it,
 `/.well-known/oauth-protected-resource` is 404 in this mode.
 
 ## Mode `static`: tests and demos
