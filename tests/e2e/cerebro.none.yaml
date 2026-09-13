@@ -1,0 +1,43 @@
+# tests/e2e/cerebro.none.yaml: the one-person path, for real. identity.mode none (no token, published on 127.0.0.1
+# only), one scope, no code repositories, documents from `files` only (tests/fixtures/docs mounted by
+# compose.none.yaml), the host's Ollama. Its own compose project so it never touches the static-mode e2e stack.
+# Bring it up with `cerebro provision up -c tests/e2e/cerebro.none.yaml --env-file tests/e2e/secrets.env`, then an
+# MCP initialize + whoami through http://127.0.0.1:8092/mcp needs no Authorization header (README.md).
+version: 2
+
+identity:
+  mode: none
+  principal: { subject: local, groups: [everyone, admin] }
+
+policy: { type: groups, always_groups: [everyone] }
+
+inference:
+  llm:   { provider: ollama, base_url: "${LLM_BASE_URL:-http://host.docker.internal:11434}", model: "${LLM_MODEL:-qwen3.6:35b-mlx}" }
+  embed: { provider: ollama, base_url: "${EMBED_BASE_URL:-http://host.docker.internal:11434}", model: "${EMBED_MODEL:-bge-m3}", dim: 1024 }
+
+engines:
+  docs:   { type: lightrag, unit: scope, options: { max_async: 2, gleaning: 0, think: false } }
+  code:   { type: tokensave, unit: scope, idle_ttl: 2h }
+  memory: { type: hindsight, options: { reranker: rrf } }
+
+provisioning:
+  target: compose
+  project: cerebro-none
+  options:
+    compose_files: [tests/e2e/compose.none.yaml]      # mounts the fixture docs into the ingest
+
+secrets:
+  source: env
+  keys: [POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, INGEST_WEBHOOK_SECRET]
+
+gateway:
+  host: 127.0.0.1                     # the publish address; mode none is never published anywhere else
+  port: 8092
+  path: /mcp
+  plugins_dir: plugins
+
+scopes:
+  public:
+    groups: [everyone]
+    docs:
+      files: { paths: [/data/docs/public] }

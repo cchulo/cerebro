@@ -1,0 +1,5 @@
+# Override for cerebro.none.yaml: the fixture docs where its `files` source expects them. Second -f file after
+# deploy/generated/compose.yaml, hence ../../ (compose resolves relative paths against the first file's directory).
+services:
+  ingest:
+    volumes: ["../../tests/fixtures/docs:/data/docs:ro"]

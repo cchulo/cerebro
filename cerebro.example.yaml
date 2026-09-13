@@ -55,7 +55,7 @@ gateway:
   port: 8090
   path: /mcp
   plugins_dir: plugins
-  # bind: 0.0.0.0                   # listen address when you run the gateway by hand behind a proxy (the provisioner sets it)
+  # bind: <listen address>          # only for a gateway run by hand behind a proxy (default: host; the provisioner sets it inside the stack)
 
 sources: {}                         # non-secret options per source plugin, e.g. jama: { url: https://jama.internal }
 

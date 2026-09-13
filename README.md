@@ -120,7 +120,11 @@ end with a demo) is frozen on the [`v1` branch](../../tree/v1). It is not mainta
 against the mock Confluence and Backstage, the fixture docs and the public pallets repositories, with static
 tokens for the demo personas; then `cerebro smoke --probes tests/e2e/probes.yaml --live`: 168 checks (identity,
 docs, code incl. branches, memory, marker isolation, live Confluence) passing. Code indexing took 2-6 s per unit,
-the 23 documents 82 s, the smoke test 2 minutes. Commands and timings: [tests/e2e/README.md](tests/e2e/README.md).
+the 23 documents about a minute, the smoke test under 2 minutes. The same day, the one-person path for real: a
+mode `none` stack (`tests/e2e/cerebro.none.yaml`) published on `127.0.0.1:8092` only, MCP `initialize`, `whoami`,
+`retain`/`recall` and `query_docs` without any token; and the scale-to-zero path with a stopped code unit
+(`errors[unit]["*"]` plus the log line naming `cerebro provision up`). Commands and timings:
+[tests/e2e/README.md](tests/e2e/README.md).
 
 | Component | Pinned | Verified in v2 |
 |---|---|---|

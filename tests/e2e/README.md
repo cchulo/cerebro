@@ -4,8 +4,10 @@ The v2 stack on Docker Compose with the mock Confluence and Backstage of `tests/
 `tests/fixtures/sources`), the fixture docs of `tests/fixtures/docs`, the public pallets repositories, the host's
 Ollama, and static bearer tokens for the demo personas. `cerebro smoke` then plays every persona through the
 gateway and checks what each may and may not see. Verified 2026-09-13 (`qwen3.6:35b-mlx` + `bge-m3` on an M-series
-Mac with OrbStack): code indexing 2-6 s per unit, the 23 fixture documents extracted in 82 s, the full smoke test
-(168 checks, `--live`) in about 2 minutes.
+Mac with OrbStack), latest run: images built in 11 s (cached layers), `provision up` to 11 healthy units in 37 s,
+code indexing 6 / 4 / 2 s per unit, the 23 fixture documents extracted in about 60 s (the 17 of `public` in 57 s),
+the full smoke test (168 checks, `--live`) in 1 min 50 s, all passing; `down --volumes` in 3 s. A second, smaller
+config exercises identity mode `none` (below).
 
 | file | what |
 |---|---|
@@ -13,6 +15,8 @@ Mac with OrbStack): code indexing 2-6 s per unit, the 23 fixture documents extra
 | `secrets.env.example` | every `${NAME}` the config and the units read; copy to `secrets.env` (gitignored) with fresh values |
 | `compose.mocks.yaml` | the mocks joined to the stack, `tests/fixtures/docs` mounted into the ingest, ingest port published |
 | `probes.yaml` | marker probes for `cerebro smoke --probes`: which persona must and must not see `ZEPHYR-7731`, `RESTRICTED-QX-9911`, `KESTREL-5520`, and the live Confluence checks |
+| `cerebro.none.yaml` | the one-person path: `identity.mode: none`, one scope, no code repositories, docs from `files` only, its own compose project `cerebro-none`, gateway on 8092 |
+| `compose.none.yaml` | the fixture docs mounted into that stack's ingest |
 
 Personas (`identity.tokens`): alice `payments-team` (public + payments), bob `sre` (public + infra), carol
 `platform-leads` (everything), dave no group (public only), ci-bot a service token with `cerebro:code.read` only.
@@ -60,6 +64,37 @@ cerebro provision down --volumes -c tests/e2e/cerebro.e2e.yaml --env-file tests/
 `cerebro provision status -c tests/e2e/cerebro.e2e.yaml --env-file tests/e2e/secrets.env` shows every unit;
 `docker compose -p cerebro logs -f gateway` shows every tool call. The gateway's `/health` is at
 http://127.0.0.1:8091/health. Everything the provisioner creates carries the label `cerebro.io/project=cerebro`.
+
+## Mode `none`, for real
+
+No token, no persona: `cerebro smoke` does not apply (it needs `identity.mode: static`), so the check is a plain MCP
+client against the published port. The same `secrets.env` serves (only the four base secrets are read).
+
+```sh
+cerebro provision up -c tests/e2e/cerebro.none.yaml --env-file tests/e2e/secrets.env       # 5 units: postgres, gateway, ingest, docs-public, memory
+docker compose -p cerebro-none exec -T ingest cerebro ingest sync                          # the 4 fixture docs of public
+python3 - <<'EOF'
+import asyncio
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+async def main():
+    async with streamablehttp_client("http://127.0.0.1:8092/mcp") as (r, w, _):        # no Authorization header
+        async with ClientSession(r, w) as s:
+            await s.initialize()
+            print((await s.call_tool("whoami", {})).structuredContent)
+asyncio.run(main())
+EOF
+cerebro provision down --volumes -c tests/e2e/cerebro.none.yaml --env-file tests/e2e/secrets.env
+```
+
+Verified 2026-09-13: the rendered gateway carries `CEREBRO_GATEWAY_BIND=0.0.0.0`, `CEREBRO_TRUSTED_NETWORK=1` and
+is published as `127.0.0.1:8092:8092` only (`docker port` confirms); `up` reached 5 healthy units in 34 s;
+`initialize`, `whoami` (`subject: local`, every token scope, scope `public`), `list_scopes`, `list_code_units`
+(none), `retain` + `recall` on `user-local` and `query_docs` (a real answer from the 4 extracted docs) all succeeded
+without a token; `/.well-known/oauth-protected-resource` is 404. A wake-up check on the static stack, with
+`code-infra` stopped by hand: `search_code` answered `errors: {"code-infra": {"*": "ConnectError: ..."}}` and the
+gateway logged that the compose provisioner cannot start units from inside the container (`cerebro provision up
+code-infra`); after `docker compose start code-infra` the same call returned hits again.
 
 ## What the smoke test checks
 
