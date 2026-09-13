@@ -34,6 +34,7 @@ inference:                          # the only outbound path for document and me
 
 engines:
   docs:   { type: lightrag, unit: scope, options: { max_async: 2, gleaning: 0, think: false } }
+  # docs: { type: pgvector }        # retrieval-only alternative: chunks + embeddings in the shared postgres, no LLM at ingest
   code:   { type: tokensave, unit: scope, idle_ttl: 2h }            # per-scope pod: repos side by side, branches per repo
   memory: { type: hindsight, options: { reranker: local } }
 
