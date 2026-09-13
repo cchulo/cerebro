@@ -44,7 +44,9 @@ provisioning:
 
 secrets:
   source: env                       # env | kubernetes | vault
-  keys: [POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, GITHUB_TOKEN, CONFLUENCE_TOKEN]
+  # every ${NAME} an engine or plugin reads from the environment, secret or not (compose: secrets.env; kubernetes: Secret)
+  keys: [POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, INGEST_WEBHOOK_SECRET, GITHUB_TOKEN,
+         CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_TOKEN, BACKSTAGE_URL, BACKSTAGE_TOKEN]
 
 gateway:
   host: 127.0.0.1
