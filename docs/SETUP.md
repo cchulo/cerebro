@@ -117,9 +117,9 @@ contains, read from `deploy/generated/compose.yaml`:
 
 In identity mode `none` the gateway unit gets `CEREBRO_GATEWAY_BIND=0.0.0.0` and `CEREBRO_TRUSTED_NETWORK=1` (its
 peer is the Docker bridge, not loopback) and the port is published on the host's `127.0.0.1` only, whatever
-`gateway.host` says: one machine, no token ([IDENTITY.md](IDENTITY.md)). Reaching it from elsewhere is
-`identity.allow_remote` plus `CEREBRO_TOKEN`, keeping `gateway.host` at `127.0.0.1` unless another machine must
-reach it; never widen `gateway.host` to `0.0.0.0` without the token.
+`gateway.host` says: one machine, no token ([IDENTITY.md](IDENTITY.md)). Reaching it from another machine is
+`identity.allow_remote` plus `CEREBRO_TOKEN`, with `gateway.host` set to the one interface that machine is on (for
+example `192.168.1.10`); `0.0.0.0` publishes on every interface and is never the right value.
 
 ## 6. Kubernetes
 
