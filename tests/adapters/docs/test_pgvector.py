@@ -100,6 +100,16 @@ def test_no_units_and_dim_from_config(ctx):
     assert a.dim == 1024 and Adapter({"dim": 16}, ctx).dim == 16      # example config: bge-m3, dim 1024
 
 
+def test_plan_provisions_nothing_for_the_docs_engine(ctx):
+    """engines.docs: {type: pgvector} adds no unit: the data lives in the shared postgres the plan creates anyway."""
+    from cerebro.provision.plan import plan
+    units, jobs = plan(ctx.config, ctx, adapters=[Adapter({}, ctx)])
+    by = {u.name: u for u in units}
+    assert not [u for u in units if u.role == "docs"] and jobs == []
+    assert by["postgres"].image.startswith("pgvector/pgvector:") and "CREATE DATABASE cerebro;" in by["postgres"].files["/docker-entrypoint-initdb.d/init.sql"]
+    assert by["ingest"].depends_on == ["postgres"] and "postgres" in by["gateway"].depends_on
+
+
 async def test_health_down_when_unreachable(ctx):
     h = await Adapter({"dsn": "host=127.0.0.1 port=1 user=x dbname=x connect_timeout=1", "dim": DIM}, ctx).health("public")
     assert isinstance(h, Health) and not h.ok and "pgvector (public)" in h.detail
