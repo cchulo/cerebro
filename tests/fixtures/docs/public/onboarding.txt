@@ -1,0 +1,3 @@
+Onboarding checklist:
+- get a token
+- read the ADRs
