@@ -46,6 +46,26 @@ def test_unknown_unit_or_job_is_an_error(checkout):
         provision_cli._selected([], ["x"])
 
 
+def test_up_hints_at_identity_seed_in_builtin_mode(checkout, capsys, monkeypatch):
+    from cerebro.adapters.provision import compose
+    from cerebro.core.contracts.provision import Endpoint
+
+    async def fake_ensure(self, spec):
+        return Endpoint(url=self.endpoint(spec.name), ready=True)
+    monkeypatch.setattr(compose.Adapter, "ensure", fake_ensure)
+    assert provision_cli.main(["up", "--target", "compose"]) == 0
+    assert "cerebro identity seed" not in capsys.readouterr().out
+    cfg = yaml.safe_load((checkout / "cerebro.yaml").read_text())
+    cfg["identity"] = {"mode": "builtin", "users": [{"name": "alice"}]}
+    cfg["secrets"]["keys"] += ["CEREBRO_AUTH_ADMIN_USER", "CEREBRO_AUTH_ADMIN_PASSWORD"]
+    (checkout / "cerebro.yaml").write_text(yaml.safe_dump(cfg))
+    assert provision_cli.main(["up", "--target", "compose"]) == 0
+    out = capsys.readouterr().out
+    assert "auth " in out and "cerebro identity seed -c cerebro.yaml --env-file secrets.env" in out
+    assert provision_cli.main(["up", "--target", "compose", "gateway"]) == 0
+    assert "cerebro identity seed" not in capsys.readouterr().out, "only when the auth unit was started"
+
+
 def test_env_file_feeds_config_interpolation(checkout, capsys):
     cfg = yaml.safe_load((checkout / "cerebro.yaml").read_text())
     cfg["identity"] = {"mode": "static", "tokens": {"${CEREBRO_TOKEN_ALICE}": {"subject": "alice"}}}

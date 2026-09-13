@@ -18,8 +18,9 @@ opening it to more than one person.
 ## 2. `cerebro.yaml`, section by section
 
 Start from `cerebro.example.yaml`. Every key below is the schema in `cerebro/core/config.py`; `cerebro schema` prints
-it as JSON schema for editor completion and `cerebro validate` checks a file and prints the resolved units. Any string
-may contain `${NAME}` or `${NAME:-default}`, interpolated from the environment when the file is loaded.
+it as JSON schema for editor completion and `cerebro validate [--env-file secrets.env]` checks a file and prints the
+resolved units. Any string may contain `${NAME}` or `${NAME:-default}`, interpolated from the environment (and, for
+the CLIs, the env file) when the file is loaded.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -94,6 +95,7 @@ cerebro provision up [unit ...]               # render, `docker compose up -d`, 
 cerebro provision status [unit ...]           # ready | starting | stopped | absent, from `docker compose ps`
 cerebro provision job index-code-public --wait   # run a job now (profile `jobs`)
 cerebro provision down [--volumes]            # stop and remove; --volumes deletes every data volume
+cerebro identity seed                         # builtin mode, after up: realm, users, groups, the gateway's audience
 ```
 
 All take `-c cerebro.yaml`, `--target`, `--env-file secrets.env` and `-o deploy/generated`. What the rendered file

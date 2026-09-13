@@ -96,6 +96,9 @@ async def _up(cfg, ctx, adapter, args) -> int:
         ep = await adapter.ensure(u)
         print(f"{u.name:<28} {'ready' if ep.ready else 'NOT READY'}  {ep.url}")
         failed += not ep.ready
+    if cfg.identity.mode == "builtin" and any(u.role == "auth" for u in _selected(units, args.units)):
+        print(f"identity.mode builtin: seed the realm (users, groups, the gateway's audience) with\n"
+              f"  cerebro identity seed -c {args.config} --env-file {args.env_file}")
     return 1 if failed else 0
 
 

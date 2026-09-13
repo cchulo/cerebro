@@ -22,9 +22,14 @@ class Secrets(Protocol):
 
 
 class EnvSecrets:
-    """Secrets from the process environment (compose `env_file`, Kubernetes `envFrom: secretRef`)."""
+    """Secrets from the process environment (compose `env_file`, Kubernetes `envFrom: secretRef`). `fallback` is
+    consulted for names the environment lacks: a CLI on the operator's machine passes the parsed secrets.env."""
+    def __init__(self, fallback: dict[str, str] | None = None):
+        self.fallback = dict(fallback or {})
+
     def get(self, name: str, default: str | None = None) -> str | None:
-        return os.environ.get(name, default)
+        value = os.environ.get(name)
+        return value if value is not None else self.fallback.get(name, default)
 
 
 class Locator(ABC):

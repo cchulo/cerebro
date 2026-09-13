@@ -78,19 +78,18 @@ enabled in the realm, else `UPDATE_PASSWORD`; a temporary password from `CEREBRO
 printed once), a client scope per token scope with an **Audience mapper** whose custom audience is the resource id,
 a `groups` client scope (group membership mapper, names without path), all of them realm defaults, the public client
 `cerebro-mcp` (authorization code + PKCE S256, loopback redirect URIs `http://127.0.0.1:*`, `http://localhost:*`,
-`urn:ietf:wg:oauth:2.0:oob`), and the anonymous registration policies below. There is no `cerebro` command for it
-yet; run it from Python once Keycloak is ready, with `CEREBRO_AUTH_ADMIN_USER` / `CEREBRO_AUTH_ADMIN_PASSWORD` in the
-environment and `admin_url` pointing at where this machine reaches Keycloak:
+`urn:ietf:wg:oauth:2.0:oob`), and the anonymous registration policies below. The command for it, which
+`cerebro provision up` reminds you of in this mode:
 
-```python
-import asyncio, json, sys
-from cerebro.core import AdapterContext, load_config, registry
-cfg = load_config("cerebro.yaml")
-server = cfg.identity.server
-auth = registry.build("auth", server.type, {**server.options, "admin_url": sys.argv[1]}, AdapterContext(cfg))
-groups = sorted({g for s in cfg.scopes.values() for g in s.groups})
-print(json.dumps(asyncio.run(auth.seed(cfg.identity.users, groups, cfg.resource_id())), indent=2))
+```sh
+cerebro identity seed -c cerebro.yaml --env-file secrets.env      # [--admin-url http://localhost:8180] [--timeout 300]
 ```
+
+It builds the adapter, waits for `ready()`, seeds `identity.users` and every group a scope grants (minus
+`policy.always_groups`) for the gateway's resource id, prints the report as JSON and the first-login instructions.
+The admin API is reached at the issuer's origin (`identity.server.public_url`, published on the host's loopback by
+compose) unless `--admin-url` says otherwise; `CEREBRO_AUTH_ADMIN_USER` / `CEREBRO_AUTH_ADMIN_PASSWORD` come from the
+environment or `--env-file`. Idempotent: run it again after editing users or scopes.
 
 First login: the seeded user opens `<public_url>` (the account console at `<public_url>/realms/<realm>/account`, or
 the MCP client's login page), signs in with the temporary password and is asked to register a passkey (or set a

@@ -81,8 +81,8 @@ unit (`<identity.server.public_url>/realms/cerebro`, default `http://localhost:8
 `127.0.0.1:8180` so browsers can log in) and validates tokens for its own resource id. For a real team set
 `identity.server.public_url: https://auth.example.org` and `gateway.public_url: https://context.example.org/mcp`,
 put your TLS reverse proxy or Ingress in front of `gateway` and `auth`, and hand every developer the one URL. Then
-`cerebro provision up`, seed the realm (users, groups, the `cerebro-mcp` public client, token scopes with audience
-mappers) as described in [docs/IDENTITY.md](docs/IDENTITY.md). Their MCP client discovers the authorization server
+`cerebro provision up` and `cerebro identity seed` (users, groups, the `cerebro-mcp` public client, token scopes
+with audience mappers; [docs/IDENTITY.md](docs/IDENTITY.md)). Their MCP client discovers the authorization server
 from the gateway's RFC 9728 metadata and logs in with PKCE ([docs/CONNECT.md](docs/CONNECT.md)). Verified so far:
 unit tests against a mocked Keycloak admin API and issuer; not yet run against a live Keycloak in v2.
 
