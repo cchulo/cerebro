@@ -1,0 +1,36 @@
+entities:
+  - kind: Component
+    metadata: {name: checkout, namespace: default, description: "Checkout web service", tags: [python, tier-1],
+               links: [{title: Runbook, url: "https://wiki.internal/ENG/1002"}]}
+    spec: {type: service, lifecycle: production, owner: group:default/payments-team}
+    relations:
+      - {type: ownedBy, targetRef: "group:default/payments-team"}
+      - {type: dependsOn, targetRef: "component:default/ledger"}
+      - {type: dependsOn, targetRef: "resource:default/pg-main"}
+      - {type: partOf, targetRef: "system:default/commerce"}
+  - kind: Component
+    metadata: {name: ledger, namespace: default, description: "Double-entry ledger service", tags: [go, tier-1]}
+    spec: {type: service, lifecycle: production, owner: group:default/payments-team}
+    relations:
+      - {type: ownedBy, targetRef: "group:default/payments-team"}
+      - {type: providesApi, targetRef: "api:default/ledger-api"}
+  - kind: API
+    metadata: {name: ledger-api, namespace: default, description: "gRPC API of the ledger"}
+    spec: {type: grpc, lifecycle: production, owner: group:default/payments-team}
+    relations: [{type: apiProvidedBy, targetRef: "component:default/ledger"}]
+  - kind: System
+    metadata: {name: commerce, namespace: default, description: "Everything that takes money"}
+    spec: {owner: group:default/platform-leads}
+    relations: [{type: hasPart, targetRef: "component:default/checkout"}]
+  - kind: Resource
+    metadata: {name: pg-main, namespace: default, description: "Primary Postgres cluster"}
+    spec: {type: database, owner: group:default/sre}
+    relations: [{type: ownedBy, targetRef: "group:default/sre"}]
+  - kind: Group
+    metadata: {name: payments-team, namespace: default, description: "Payments engineering"}
+    spec: {type: team}
+    relations: []
+  - kind: Group
+    metadata: {name: sre, namespace: default, description: "Site reliability"}
+    spec: {type: team}
+    relations: []

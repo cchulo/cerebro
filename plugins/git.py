@@ -9,7 +9,7 @@ Webhook filter: {"repo": "https://github.com/org/x.git"}
 """
 import hashlib, os, subprocess, tempfile
 from pathlib import Path
-from stack_plugins import Plugin, Source, Document, ScopeContext
+from cerebro.sdk import Plugin, Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["README.md", "docs/**/*.md", "adr/**/*.md", "runbooks/**/*.md"]
 

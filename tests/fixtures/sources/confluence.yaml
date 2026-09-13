@@ -1,0 +1,42 @@
+# Fixture spaces for the mock Confluence. Each space belongs to exactly one scope (config/scopes.yaml).
+# Markers (UPPERCASE-NNNN tokens) let the smoke test prove isolation without depending on LLM wording.
+spaces:
+  ENG:
+    - id: 1001
+      title: Code review policy
+      version: 3
+      ancestors: [Engineering, Policies]
+      body: "<h1>Code review policy</h1><p>Every pull request needs two approvals, one from the owning team listed in Backstage. Security-relevant changes additionally require the appsec group. Policy id ENG-REVIEW-2201.</p>"
+    - id: 1002
+      title: Deploy runbook
+      version: 5
+      ancestors: [Engineering, Runbooks]
+      body: "<h1>Deploy runbook</h1><p>Deployments of the checkout service use the <code>shipit</code> CLI: <code>shipit deploy checkout --env prod</code> from the release branch. The on-call SRE (team sre-core) approves in #deploys first. Rollback: <code>shipit rollback checkout</code>. Runbook id ENG-DEPLOY-3302.</p>"
+    - id: 1003
+      title: Incident retro template
+      version: 1
+      ancestors: [Engineering, Process]
+      body: "<h1>Incident retro template</h1><p>Every SEV1 gets a blameless retro within five working days using this template: timeline, contributing factors, action items with owners. Template code HALCYON-8834.</p>"
+  DOCS:
+    - id: 2001
+      title: Onboarding
+      version: 1
+      body: "<h1>Onboarding</h1><p>New engineers get access through the platform-access request form. The internal handbook lives in the DOCS space. Handbook id DOCS-ONBOARD-4403.</p>"
+  PAY:
+    - id: 3001
+      title: Settlement cutoff
+      version: 2
+      ancestors: [Payments]
+      body: "<h1>Settlement cutoff</h1><p>The daily settlement batch for card payments closes at 14:30 UTC. Files are pushed to the acquirer SFTP by the ledger service. Settlement code ZEPHYR-7731.</p>"
+    - id: 3002
+      title: Fraud model thresholds (restricted)
+      version: 4
+      ancestors: [Payments, Risk]
+      restricted_to_groups: [risk-leads]
+      body: "<h1>Fraud model thresholds</h1><p>Transactions above score 0.87 are held for manual review. Threshold code RESTRICTED-QX-9911. This page has a page-level read restriction and must never be indexed.</p>"
+  OPS:
+    - id: 4001
+      title: Cluster failover
+      version: 1
+      ancestors: [SRE]
+      body: "<h1>Cluster failover</h1><p>Failover of the pg-main Postgres cluster is done with <code>patronictl switchover</code>; the standby in eu-west-2 becomes primary. Failover code KESTREL-5520.</p>"

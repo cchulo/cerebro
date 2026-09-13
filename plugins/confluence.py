@@ -9,7 +9,7 @@ Pages with page-level read restrictions are never indexed nor served: the space'
 """
 import asyncio, json
 import httpx
-from stack_plugins import Plugin, McpUpstream, Source, LiveSource, Document, ScopeContext, html_to_text
+from cerebro.sdk import Plugin, McpUpstream, Source, LiveSource, Document, ScopeContext, html_to_text
 
 EXPAND = "space,version,restrictions.read.restrictions.user,restrictions.read.restrictions.group"
 

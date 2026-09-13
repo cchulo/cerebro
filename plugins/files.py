@@ -5,7 +5,7 @@ Scope config:  docs: { files: { paths: ["/data/docs/public"], globs: ["**/*.md",
 """
 import hashlib
 from pathlib import Path
-from stack_plugins import Plugin, Source, Document, ScopeContext
+from cerebro.sdk import Plugin, Source, Document, ScopeContext
 
 DEFAULT_GLOBS = ["**/*.md", "**/*.markdown", "**/*.txt", "**/*.rst"]
 

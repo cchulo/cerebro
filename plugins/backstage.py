@@ -9,7 +9,7 @@ sources: option backstage: { url: ... }   (optional, overrides BACKSTAGE_URL)
 """
 import hashlib
 import httpx
-from stack_plugins import Plugin, Source, Document, ScopeContext
+from cerebro.sdk import Plugin, Source, Document, ScopeContext
 
 DEFAULT_KINDS = ["Component", "System", "API", "Domain", "Resource", "Group"]
 

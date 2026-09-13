@@ -11,7 +11,7 @@ Webhook filter: {"project": 42}
 """
 import hashlib, html, re
 import httpx
-from stack_plugins import Plugin, Source, Document, ScopeContext
+from cerebro.sdk import Plugin, Source, Document, ScopeContext
 
 
 def _strip_html(s: str) -> str:
