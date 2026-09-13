@@ -1,0 +1,31 @@
+# Joins the mock Confluence and Backstage (tests/mock, serving tests/fixtures/sources) to the rendered stack, mounts
+# the fixture docs where the `files` plugin of cerebro.e2e.yaml expects them, and publishes the ingest port so the
+# sync can be triggered from the host. Use as the SECOND -f file after deploy/generated/compose.yaml; compose resolves
+# relative paths against the first file's directory, hence ../../ (see README.md for the exact command).
+services:
+  mock-confluence:
+    build: { context: ../../tests/mock }
+    image: cerebro/mock-source
+    restart: unless-stopped
+    environment: { MOCK: confluence }
+    volumes: ["../../tests/fixtures/sources:/fixtures:ro"]
+    labels: { cerebro.io/project: cerebro, cerebro.io/role: mock }
+  mock-backstage:
+    build: { context: ../../tests/mock }
+    image: cerebro/mock-source
+    restart: unless-stopped
+    environment: { MOCK: backstage }
+    volumes: ["../../tests/fixtures/sources:/fixtures:ro"]
+    labels: { cerebro.io/project: cerebro, cerebro.io/role: mock }
+  mcp-confluence:                      # the plugin-declared mcp-atlassian upstream, pointed at the mock through CONFLUENCE_URL
+    depends_on:
+      mock-confluence: { condition: service_started }
+  ingest:
+    depends_on:
+      mock-confluence: { condition: service_started }
+      mock-backstage: { condition: service_started }
+    volumes: ["../../tests/fixtures/docs:/data/docs:ro"]
+    ports: ["127.0.0.1:8081:8080"]     # POST /sync/all with X-Ingest-Secret from secrets.env
+  gateway:
+    depends_on:
+      mock-confluence: { condition: service_started }

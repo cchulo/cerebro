@@ -1,0 +1,79 @@
+# tests/e2e/cerebro.e2e.yaml: the example stack against the mock sources of tests/ (mock Confluence + Backstage from
+# tests/mock, fixture docs from tests/fixtures/docs, the public pallets repositories), with static bearer tokens for
+# the demo personas. Every ${NAME} comes from tests/e2e/secrets.env (copy secrets.env.example; see README.md).
+version: 2
+
+identity:
+  mode: static                        # token -> principal; keys interpolate, so the tokens never sit in this file
+  tokens:
+    "${CEREBRO_TOKEN_ALICE}": { subject: alice, groups: [payments-team] }        # public + payments
+    "${CEREBRO_TOKEN_BOB}":   { subject: bob,   groups: [sre] }                  # public + infra
+    "${CEREBRO_TOKEN_CAROL}": { subject: carol, groups: [platform-leads] }       # everything
+    "${CEREBRO_TOKEN_DAVE}":  { subject: dave,  groups: [] }                     # public only
+    "${CEREBRO_TOKEN_CI}":    { subject: ci-bot, kind: service, groups: [sre], token_scopes: [cerebro:code.read] }
+
+policy:
+  type: groups
+  always_groups: [everyone]
+  team_banks_from_groups: true
+
+inference:                            # the host's Ollama, reached from the containers through host.docker.internal
+  llm:   { provider: ollama, base_url: "${LLM_BASE_URL:-http://host.docker.internal:11434}", model: "${LLM_MODEL:-qwen3.6:35b-mlx}" }
+  embed: { provider: ollama, base_url: "${EMBED_BASE_URL:-http://host.docker.internal:11434}", model: "${EMBED_MODEL:-bge-m3}", dim: 1024 }
+
+engines:
+  docs:   { type: lightrag, unit: scope, options: { max_async: 2, gleaning: 0, think: false } }
+  code:   { type: tokensave, unit: scope, idle_ttl: 2h }
+  memory: { type: hindsight, options: { reranker: local } }
+
+provisioning:
+  target: compose
+  project: cerebro
+  namespace: cerebro
+  options:
+    compose_files: [tests/e2e/compose.mocks.yaml]     # the mocks override, added to every docker compose command
+
+secrets:
+  source: env
+  keys: [POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, INGEST_WEBHOOK_SECRET, GITHUB_TOKEN,
+         CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_TOKEN, BACKSTAGE_URL, BACKSTAGE_TOKEN,
+         CEREBRO_TOKEN_ALICE, CEREBRO_TOKEN_BOB, CEREBRO_TOKEN_CAROL, CEREBRO_TOKEN_DAVE, CEREBRO_TOKEN_CI]
+
+gateway:
+  host: 127.0.0.1
+  port: 8091                          # 8090 may be taken by a v1 stack on the same machine
+  path: /mcp
+  plugins_dir: plugins
+
+sources:
+  confluence: { rest_url: http://mock-confluence:8000 }     # the mcp-confluence upstream reads CONFLUENCE_URL from secrets.env
+  backstage:  { url: http://mock-backstage:8000 }
+
+scopes:
+  public:
+    groups: [everyone]
+    code:
+      repos:
+        - https://github.com/pallets/click.git                     # default branch only
+        - url: https://github.com/pallets/flask.git
+          branches: [main, stable]                                # a second tracked branch: exercises TokenSave branches
+    docs:
+      confluence: { spaces: [ENG, DOCS] }
+      backstage: {}
+      git: { globs: [README.md] }
+      files: { paths: [/data/docs/public] }                       # tests/fixtures/docs mounted at /data/docs (compose.mocks.yaml)
+  payments:
+    groups: [payments-team, platform-leads]
+    code:
+      unit: repo                                                  # one workload per repository
+      repos: [https://github.com/pallets/jinja.git]
+    docs:
+      confluence: { spaces: [PAY] }                               # page 3002 is restricted: never indexed, never served
+      git: { globs: [README.md] }
+  infra:
+    groups: [sre, platform-leads]
+    code: { repos: [https://github.com/pallets/werkzeug.git] }
+    docs:
+      confluence: { spaces: [OPS] }
+      git: { globs: [README.md] }
+      files: { paths: [/data/docs/infra] }

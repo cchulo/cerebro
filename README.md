@@ -109,17 +109,23 @@ end with a demo) is frozen on the [`v1` branch](../../tree/v1). It is not mainta
 
 ## Pinned versions and what was verified
 
+**Live, 2026-09-13:** the whole stack on Docker Compose (OrbStack, host Ollama with `qwen3.6:35b-mlx` + `bge-m3`)
+against the mock Confluence and Backstage, the fixture docs and the public pallets repositories, with static
+tokens for the demo personas; then `cerebro smoke --probes tests/e2e/probes.yaml --live`: 168 checks (identity,
+docs, code incl. branches, memory, marker isolation, live Confluence) passing. Code indexing took 2-6 s per unit,
+the 23 documents 82 s, the smoke test 2 minutes. Commands and timings: [tests/e2e/README.md](tests/e2e/README.md).
+
 | Component | Pinned | Verified in v2 |
 |---|---|---|
-| LightRAG | `ghcr.io/hkuds/lightrag:v1.5.7` | unit tests against mocks of the same calls v1 verified live (`/documents/texts`, `/documents/paginated`, `/documents/delete_document`, `/query`, `X-API-Key`) |
-| Hindsight | `ghcr.io/vectorize-io/hindsight:0.9.2` | unit tests against mocks of the v1 wire calls (`/v1/{tenant}/banks/{bank}/memories`, `/recall`, `/reflect`) |
+| LightRAG | `ghcr.io/hkuds/lightrag:v1.5.7` | live: one unit per scope on the shared Postgres, sync of 23 documents, queries with references, marker isolation per scope; unit tests against mocks of the same calls (`/documents/texts`, `/documents/paginated`, `/documents/delete_document`, `/query`, `X-API-Key`) |
+| Hindsight | `ghcr.io/vectorize-io/hindsight:0.9.2` | live: retain + recall on personal and team banks, foreign banks refused; unit tests against mocks of the v1 wire calls (`/v1/{tenant}/banks/{bank}/memories`, `/recall`, `/reflect`) |
 | Keycloak | `quay.io/keycloak/keycloak:26.7.3` | unit tests against a stateful mock of the admin REST API; RFC 8707 and CIMD status read from its documentation ([docs/IDENTITY.md](docs/IDENTITY.md)) |
-| TokenSave | `7.12.1` in `cerebro/code-unit` (built here) | real binary: tool inventory, `graph_root`/`graph_branch` behaviour, branch tracking, the served empty root; the bridge and indexer against real git repositories |
-| Postgres | `pgvector/pgvector:pg16` | rendered manifests only |
+| TokenSave | `7.12.1` in `cerebro/code-unit` (built here) | live: three units (scope and per-repo), index jobs on click/flask/jinja/werkzeug with flask tracking `stable`, `search_code` and `code_tool` per branch through the gateway; real binary: tool inventory, `graph_root`/`graph_branch` behaviour, branch tracking, the served empty root; the bridge and indexer against real git repositories |
+| Postgres | `pgvector/pgvector:pg16` | live: init.sql databases, LightRAG PG storages, Hindsight |
 | Ollama | `ollama/ollama:0.33.3` | rendered manifests; native and OpenAI-compatible adapters against mocks |
-| mcp-atlassian | `ghcr.io/sooperset/mcp-atlassian:0.23.1` | rendered as `mcp-confluence`; tool names as v1 verified live |
-| compose scheduler | `docker:27-cli` (busybox crond) | rendered manifests only |
+| mcp-atlassian | `ghcr.io/sooperset/mcp-atlassian:0.23.1` | live as `mcp-confluence` against the mock: `live_search` confined to the caller's spaces, `live_fetch` refusing foreign and restricted pages, `query_docs` fallback |
+| compose provisioner | `docker compose` v2 | live: render, build, up (health waits), job, status, down --volumes; the scheduler service (`docker:27-cli`, busybox crond) rendered only |
 | python `mcp` | `>=1.10,<2` | gateway and bridge tests over streamable HTTP |
-| Gateway image, identity mode `none` and `allow_remote` | `images/gateway/Dockerfile` | built and run: loopback bind inside the container, 401 without the token, MCP initialize with it |
+| Gateway and ingest images | `images/gateway`, `images/ingest` | live in the stack with identity mode `static` (five personas, one service token); mode `none` and `allow_remote`: loopback bind inside the container, 401 without the token, MCP initialize with it |
 
-`pytest` runs the whole suite (270 tests); the tests that need the TokenSave binary skip without it.
+`pytest` runs the whole suite (282 tests); the tests that need the TokenSave binary or a Postgres skip without them.
