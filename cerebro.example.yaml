@@ -1,0 +1,84 @@
+# cerebro.yaml — the only file an operator edits. Copy to cerebro.yaml. Secrets are referenced by name, never written here.
+# ${NAME} / ${NAME:-default} in any string is interpolated from the environment at load time.
+# Schema: `cerebro schema`; check: `cerebro validate`.
+version: 2
+
+identity:
+  # none:     one person on their own machine. No tokens; every request is `principal`; the gateway listens on 127.0.0.1.
+  # static:   a token -> principal map (tests, demos).
+  # builtin:  the stack runs an authorization server (Keycloak) as a unit; users below are seeded on first start.
+  # external: any OAuth 2.1 / OIDC issuer (Keycloak you already run, Authentik, Okta, Entra, ...).
+  mode: none
+  principal: { subject: me, groups: [everyone, admin] }
+  # mode: external
+  # issuer: https://sso.internal/realms/eng
+  # audience: https://context.internal/mcp
+  # groups_claim: groups
+  # token_validation: jwks          # jwks | introspection
+  # mode: builtin
+  # server: { type: keycloak, realm: cerebro, public_url: http://localhost:8180 }
+  # users:
+  #   - { name: alice, groups: [payments-team] }
+  #   - { name: bob,   groups: [sre] }
+  # legacy: { type: trusted_headers, user_header: X-Forwarded-User, groups_header: X-Forwarded-Groups }
+
+policy:
+  type: groups                      # IdP groups -> scopes, from `scopes:` below
+  always_groups: [everyone]
+  team_banks_from_groups: true      # group "payments-team" -> shared memory bank "team-payments-team"
+
+inference:                          # the only outbound path for document and memory text
+  llm:   { provider: ollama, base_url: "${LLM_BASE_URL:-http://ollama:11434}", model: gpt-oss:20b }
+  embed: { provider: ollama, base_url: "${EMBED_BASE_URL:-http://ollama:11434}", model: bge-m3, dim: 1024 }
+
+engines:
+  docs:   { type: lightrag, unit: scope, options: { max_async: 2, gleaning: 0, think: false } }
+  code:   { type: tokensave, unit: scope, idle_ttl: 2h }            # per-scope pod: repos side by side, branches per repo
+  memory: { type: hindsight, options: { reranker: local } }
+
+provisioning:
+  target: compose                   # compose | kubernetes
+  project: cerebro
+  namespace: cerebro
+
+secrets:
+  source: env                       # env | kubernetes | vault
+  keys: [POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, GITHUB_TOKEN, CONFLUENCE_TOKEN]
+
+gateway:
+  host: 127.0.0.1
+  port: 8090
+  path: /mcp
+  plugins_dir: plugins
+
+sources: {}                         # non-secret options per source plugin, e.g. jama: { url: https://jama.internal }
+
+scopes:                             # the isolation unit for documents AND code; a repo or space belongs to exactly one scope
+  public:
+    groups: [everyone]
+    code:
+      repos:
+        - https://github.com/pallets/click.git                     # string = default branch only
+        - url: https://github.com/pallets/flask.git
+          branches: [main, "stable"]                              # tracked branches (engines with branch support)
+    docs:
+      confluence: { spaces: [ENG, DOCS] }
+      backstage: {}
+      git: { globs: [README.md] }
+      files: { paths: [/data/docs/public] }
+  payments:
+    groups: [payments-team, platform-leads]
+    code:
+      unit: repo                                                  # one workload per repository in this scope
+      repos: [https://github.com/pallets/jinja.git]
+    docs:
+      confluence: { spaces: [PAY] }
+      git: {}
+      jama: { projects: [42] }
+  infra:
+    groups: [sre, platform-leads]
+    code: { repos: [https://github.com/pallets/werkzeug.git] }
+    docs:
+      confluence: { spaces: [OPS] }
+      git: {}
+      files: { paths: [/data/docs/infra] }
