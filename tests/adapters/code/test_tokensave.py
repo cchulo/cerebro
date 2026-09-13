@@ -62,6 +62,10 @@ async def test_search_maps_grep_hits(live, unit):
     hits = await adapter.search(unit, r"def (main|helper)", regex=True, repos=["github.com/pallets/flask", "github.com/nope/x"])
     assert [h.line for h in hits] == [1, 5] and all(h.repository == "github.com/pallets/flask" for h in hits)
     assert await adapter.search(unit, "def", repos=["github.com/nope/x"]) == []
+    with pytest.raises(RuntimeError, match="not indexed"):                # an untracked branch is an error, not an empty answer
+        await adapter.search(unit, "def", branch="no-such-branch")
+    hits = await adapter.search(unit, "def main", branch="stable")           # click has no stable: partial, flask still answers
+    assert [h.repository for h in hits] == ["github.com/pallets/flask"]
 
 
 async def test_call_proxies_with_repo_and_branch(live, unit):

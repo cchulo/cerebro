@@ -19,7 +19,7 @@ with graph_root / graph_branch, which the bridge derives from `repo` / `branch`;
 TokenSave, so `search` is ripgrep in the unit.
 """
 from __future__ import annotations
-import datetime, json
+import datetime, json, logging
 from typing import Any
 import httpx
 from cerebro.core import CodeUnit, Health, code_units
@@ -28,6 +28,7 @@ from cerebro.core.contracts.provision import JobSpec, PortSpec, UnitSpec, Volume
 from cerebro.core.types import Forbidden, Unsupported
 from cerebro.bridge.workspace import REPOS_ENV, UNIT_ENV, repos_env_value
 
+log = logging.getLogger("cerebro.adapters.code.tokensave")
 IMAGE = "cerebro/code-unit"
 BUILD_DIR = "images/code-unit"
 PORT = 8045
@@ -113,6 +114,11 @@ class Adapter(CodeIntelligence):
         for h in data.get("hits", []):
             if h.get("repository") in allowed:                           # belt and braces: only this unit's repos
                 hits.append(SearchHit(**{k: h.get(k) for k in ("repository", "path", "line", "content", "language", "branch")}))
+        errors = [e for e in data.get("errors", []) if isinstance(e, str)]
+        if errors and not hits:          # a branch that is not indexed, a repo not checked out: say so, never an empty answer
+            raise RuntimeError("; ".join(errors)[:600])
+        if errors:
+            log.info("grep on %s: partial: %s", unit.name, "; ".join(errors)[:300])
         return hits
 
     async def call(self, unit: CodeUnit, tool: str, args: dict[str, Any] | None = None, *,
