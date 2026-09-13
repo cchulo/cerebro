@@ -17,3 +17,9 @@ pytest
 Layout: `cerebro/core` (contracts, config, principal; imports no engine), `cerebro/gateway`, `cerebro/ingest`,
 `cerebro/adapters/<kind>/<name>` (one per engine), `plugins/` (knowledge sources), `tests/contracts` (the harness
 every adapter must pass). Details and the build order: [docs/DESIGN-V2.md](docs/DESIGN-V2.md).
+
+Adapters on `main` so far (all tested against mocked engines; none verified against a live service yet):
+
+| kind | `type:` | engine | unit it contributes |
+|---|---|---|---|
+| memory | `hindsight` | Hindsight 0.9.2 (`ghcr.io/vectorize-io/hindsight:0.9.2`), v1 wire calls, bank-addressed | `memory` (port 8888, secrets `HINDSIGHT_API_KEY`, `POSTGRES_PASSWORD`) |
