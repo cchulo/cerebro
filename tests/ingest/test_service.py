@@ -42,7 +42,7 @@ async def test_sync_all_runs_in_the_background(client, index, app):
     assert r.status_code == 200 and r.json() == {"queued": "all"}
     assert [b.scope for b in index.batches] == ["public", "infra"]
     last = app.state.runs[-1]
-    assert last["run"] == "all" and last["report"]["public/files"] == {"changed": 3, "removed": 0}
+    assert last["run"] == "all" and last["report"]["public/files"] == {"changed": 4, "removed": 0}
     assert (await client.get("/health")).json()["last_run"]["run"] == "all"
 
 

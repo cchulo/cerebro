@@ -8,15 +8,16 @@ from cerebro.ingest import sync, Ingest
 from cerebro.ingest.plugins import SourceRegistry
 from tests.ingest.conftest import FakeIndex, make_config
 
-PUBLIC = {"files:public:public/deploy.md", "files:public:public/onboarding.txt", "files:public:public/adr/0001.md"}
+PUBLIC = {"files:public:public/deploy.md", "files:public:public/onboarding.txt", "files:public:public/adr/0001.md",
+          "files:public:public/architecture-overview.md"}          # the last one is the v1 fixture with isolation markers
 
 
 def test_first_sync_upserts_everything_and_commits_state(ingest, index):
     report = sync(ingest)
-    assert report["public/files"] == {"changed": 3, "removed": 0} and report["infra/files"] == {"changed": 1, "removed": 0}
-    assert report["public"]["index"] == {"scope": "public", "deleted": 3, "inserted": 3}      # upsert = delete + insert
+    assert report["public/files"] == {"changed": 4, "removed": 0} and report["infra/files"] == {"changed": 2, "removed": 0}
+    assert report["public"]["index"] == {"scope": "public", "deleted": 4, "inserted": 4}      # upsert = delete + insert
     assert [b.scope for b in index.batches] == ["public", "infra"]
-    assert set(index.all_upserts()) == PUBLIC | {"files:infra:infra/postgres.md"}
+    assert set(index.all_upserts()) == PUBLIC | {"files:infra:infra/postgres.md", "files:infra:infra/oncall.md"}
     assert index.all_upserts()["files:public:public/deploy.md"].endswith("We deploy with `make up`. The gateway listens on 8090.\n")
     assert next(d.title for d in index.batches[0].upserts if d.source_id.endswith("adr/0001.md")) == "adr/0001.md"
     assert sorted(ingest.state.keys_with_prefix("files:public:")) == sorted(PUBLIC)
@@ -43,7 +44,7 @@ def test_vanished_documents_are_deleted_and_forgotten(ingest, index, docs_dir):
     b = index.batches[-1]
     assert b.deletes == {"files:public:public/onboarding.txt"} and b.upserts == []
     assert ingest.state.get("files:public:public/onboarding.txt") is None
-    assert len(ingest.state.keys_with_prefix("files:public:")) == 2
+    assert len(ingest.state.keys_with_prefix("files:public:")) == 3
 
 
 def test_index_failure_leaves_state_untouched(ingest, index):
@@ -52,7 +53,7 @@ def test_index_failure_leaves_state_untouched(ingest, index):
         sync(ingest)
     assert ingest.state.keys_with_prefix("") == []
     index.fail = None
-    assert sync(ingest)["public/files"]["changed"] == 3                # the retry re-sends everything
+    assert sync(ingest)["public/files"]["changed"] == 4                # the retry re-sends everything
 
 
 def test_scope_and_source_selection(ingest, index):
