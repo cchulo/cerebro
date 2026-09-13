@@ -1,9 +1,10 @@
-# build context for images/*/Dockerfile (built from the repository root)
+# build context for images/*/Dockerfile is the repository root; keep it small
 .git
 .claude
 .venv
 .pytest_cache
 **/__pycache__
+**/*.pyc
 *.egg-info
 dist
 build
@@ -14,3 +15,4 @@ cerebro.yaml
 .env
 secrets.env
 .demo
+.DS_Store
