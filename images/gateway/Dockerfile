@@ -1,8 +1,10 @@
 # The MCP gateway. Build context is the repository root:
 #     docker build -f images/gateway/Dockerfile -t cerebro/gateway:dev .
 # Runtime: mount cerebro.yaml at /config/cerebro.yaml (or set CEREBRO_CONFIG) and pass secrets as env vars
-# (secrets.source env). Inside a container identity.mode none binds to 127.0.0.1 and is unreachable from outside
-# by design; set identity.allow_remote (with CEREBRO_TOKEN) or use static/builtin/external to publish the port.
+# (secrets.source env). The provisioner sets CEREBRO_GATEWAY_BIND=0.0.0.0 (a published port cannot reach a loopback
+# listener) and, in identity.mode none, CEREBRO_TRUSTED_NETWORK=1 (the peer is the bridge, not loopback) while
+# publishing the port on the host's 127.0.0.1 only. Run by hand without those, mode none binds 127.0.0.1 and is
+# unreachable from outside by design.
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 CEREBRO_CONFIG=/config/cerebro.yaml

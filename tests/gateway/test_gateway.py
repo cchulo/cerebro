@@ -122,6 +122,23 @@ def test_bind_host_follows_the_provisioner_but_never_for_loopback_only_mode(make
     assert gw.bind_host() == "0.0.0.0" and gw.host == "127.0.0.1", "clients still reach it at gateway.host"
     local = make_gateway(make_config, make_ctx, identity={"mode": "none"})
     assert local.bind_host() == "127.0.0.1", "mode none without allow_remote ignores the environment"
+    monkeypatch.setenv("CEREBRO_TRUSTED_NETWORK", "1")                # both set by the provisioner on the gateway unit
+    assert local.bind_host() == "0.0.0.0" and local.host == "127.0.0.1", "published on loopback, listening inside the workload"
+    monkeypatch.delenv("CEREBRO_GATEWAY_BIND")
+    assert local.bind_host() == "127.0.0.1"
+    monkeypatch.delenv("CEREBRO_TRUSTED_NETWORK")
+    configured = make_gateway(make_config, make_ctx, gateway={"bind": "0.0.0.0"})
+    assert configured.bind_host() == "0.0.0.0" and configured.host == "127.0.0.1", "gateway.bind is the documented form of the env"
+    monkeypatch.setenv("CEREBRO_GATEWAY_BIND", "10.0.0.5")
+    assert configured.bind_host() == "10.0.0.5", "the provisioner's env wins over gateway.bind"
+
+
+async def test_mode_none_inside_a_workload_serves_a_bridge_peer_without_a_token(make_config, make_ctx, monkeypatch):
+    monkeypatch.setenv("CEREBRO_TRUSTED_NETWORK", "1")
+    gw = make_gateway(make_config, make_ctx, identity={"mode": "none", "principal": {"subject": "me", "groups": ["sre"]}})
+    async with session(gw, None, client_host="172.18.0.1") as s:
+        err, me = await call(s, "whoami")
+        assert not err and me["subject"] == "me" and me["scopes"] == ["public", "infra"]
 
 
 # ------------------------------------------------------------------------------------------------- grants

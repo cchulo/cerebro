@@ -4,7 +4,8 @@
 version: 2
 
 identity:
-  # none:     one person on their own machine. No tokens; every request is `principal`; the gateway listens on 127.0.0.1.
+  # none:     one person on their own machine. No tokens; every request is `principal`; reachable on 127.0.0.1 only
+  #           (on compose the port is published there; allow_remote + CEREBRO_TOKEN is the explicit LAN option).
   # static:   a token -> principal map (tests, demos).
   # builtin:  the stack runs an authorization server (Keycloak) as a unit; users below are seeded on first start.
   # external: any OAuth 2.1 / OIDC issuer (Keycloak you already run, Authentik, Okta, Entra, ...).
@@ -50,10 +51,11 @@ secrets:
          CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_TOKEN, BACKSTAGE_URL, BACKSTAGE_TOKEN]
 
 gateway:
-  host: 127.0.0.1
+  host: 127.0.0.1                   # where clients reach it: the interface compose publishes on; keep it loopback
   port: 8090
   path: /mcp
   plugins_dir: plugins
+  # bind: 0.0.0.0                   # listen address when you run the gateway by hand behind a proxy (the provisioner sets it)
 
 sources: {}                         # non-secret options per source plugin, e.g. jama: { url: https://jama.internal }
 

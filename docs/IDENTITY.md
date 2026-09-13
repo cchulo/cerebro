@@ -17,19 +17,30 @@ security model. The adapters are in `cerebro/adapters/identity/`, the mode-to-ad
 ## Mode `none`: one person, one machine
 
 Every request is `identity.principal` (default `{subject: local, groups: [everyone, admin]}`) with every token scope.
-The adapter refuses a request whose peer address is not loopback. Run as a bare process the gateway listens on
-`127.0.0.1` whatever `gateway.host` says. Run as a compose or Kubernetes workload the provisioner sets the container's
-bind address (`CEREBRO_GATEWAY_BIND`) and publishes the port on `gateway.host`, `127.0.0.1` by default; keep it there.
-`0.0.0.0` as `gateway.host` publishes the gateway on every interface of the machine and is never the right setting for
-one person on one machine. Inside a container the peer of a published-port request is the container network, not
-loopback, so mode `none` refuses it until the trusted-network fix lands.
+There is no token, so the network is the whole protection, and it works in two settings:
 
-`identity.allow_remote: true` lifts both rules and adds one: every request, loopback included (a same-host proxy
-cannot bypass it), must carry `Authorization: Bearer <value of the secret named identity.static_token_env>` (default
-`CEREBRO_TOKEN`); an empty secret is a 401, not an open door. `gateway.host` stays the publish address: leave it at
-`127.0.0.1` unless other machines on your network must reach the gateway, and then pair the wider interface with a
-strong token. Verified: 401 without the token, MCP `initialize` with it, `/.well-known/oauth-protected-resource` is
-404 in this mode.
+- **On the host** (`cerebro gateway serve`): the gateway binds `127.0.0.1` whatever `gateway.host` says, and the
+  adapter refuses a request whose peer address is not loopback.
+- **Provisioned** (compose, kubernetes): inside a workload the peer is never loopback (the Docker bridge, the
+  port-forward), so the provisioner sets two variables on the gateway unit: `CEREBRO_GATEWAY_BIND=0.0.0.0` (the
+  process listens on the container's interfaces; a published port cannot reach a loopback listener) and
+  `CEREBRO_TRUSTED_NETWORK=1` (the adapter accepts any peer). What keeps that safe is where the port lands: compose
+  publishes it on the host's `127.0.0.1` only, whatever `gateway.host` says in this mode; kubernetes renders a
+  ClusterIP Service that you reach with `kubectl -n cerebro port-forward svc/gateway 8090:8090`. Never set
+  `CEREBRO_TRUSTED_NETWORK` by hand on a port other machines can reach. Verified in the built image on compose:
+  MCP `initialize` and `whoami` through `http://127.0.0.1:<port>/mcp` without a token.
+
+`gateway.host` is the publish address (where clients reach the gateway), `127.0.0.1` by default; keep it there.
+`0.0.0.0` as `gateway.host` publishes the gateway on every interface of the machine and is never the right setting
+for one person on one machine. `gateway.bind` is the documented form of `CEREBRO_GATEWAY_BIND` (`None` = `host`) for
+a gateway you run yourself behind something that needs another listen address; the provisioner keeps setting the env.
+
+`identity.allow_remote: true` is the explicit LAN option. It lifts the loopback rules and adds one: every request,
+loopback included (a same-host proxy cannot bypass it), must carry `Authorization: Bearer <value of the secret named
+identity.static_token_env>` (default `CEREBRO_TOKEN`); an empty secret is a 401, not an open door. `gateway.host`
+stays the publish address: leave it at `127.0.0.1` unless other machines on your network must reach the gateway,
+and then pair the wider interface with a strong token. Verified: 401 without the token, MCP `initialize` with it,
+`/.well-known/oauth-protected-resource` is 404 in this mode.
 
 ## Mode `static`: tests and demos
 

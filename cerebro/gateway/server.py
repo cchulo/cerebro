@@ -38,6 +38,7 @@ from cerebro.core.contracts import (AccessPolicy, CodeIntelligence, DocumentInde
 from cerebro.core.types import Forbidden, Unauthenticated, Unsupported
 from cerebro.core.units import units_for_repos
 from cerebro.adapters.identity._bearer import WELL_KNOWN
+from cerebro.adapters.identity.none import trusted_network
 from .identity import build_identity
 from .live import LiveRegistry
 
@@ -186,21 +187,23 @@ class Gateway:
 
     @property
     def host(self) -> str:
-        """identity.mode none binds to loopback unless allow_remote (then a static token guards every request)."""
+        """Where clients reach the gateway (`gateway.host`; the address the provisioner publishes the port on).
+        identity.mode none is loopback unless allow_remote (then a static token guards every request)."""
         ident = self.config.identity
         if ident.mode == "none" and not ident.allow_remote:
             return "127.0.0.1"
         return self.config.gateway.host
 
     def bind_host(self) -> str:
-        """Address uvicorn listens on. `gateway.host` is where clients reach the gateway (the address the provisioner
-        publishes the port on); inside a workload the process itself must listen on every interface or the published
-        port / Service never reaches it, which the provisioner signals with $CEREBRO_GATEWAY_BIND. Mode none without
-        allow_remote stays on loopback whatever the environment says."""
+        """Address uvicorn listens on: $CEREBRO_GATEWAY_BIND (the provisioner sets 0.0.0.0 inside a workload, where
+        the process must listen on every interface or the published port / Service never reaches it), else
+        `gateway.bind`, else `gateway.host`. Mode none without allow_remote stays on loopback unless the provisioner
+        also set $CEREBRO_TRUSTED_NETWORK (compose publishes on 127.0.0.1 only; kubernetes is a ClusterIP), so a
+        bare `cerebro gateway serve` never listens beyond loopback in that mode."""
         ident = self.config.identity
-        if ident.mode == "none" and not ident.allow_remote:
+        if ident.mode == "none" and not ident.allow_remote and not trusted_network():
             return "127.0.0.1"
-        return os.environ.get(BIND_ENV) or self.config.gateway.host
+        return os.environ.get(BIND_ENV) or self.config.gateway.bind or self.config.gateway.host
 
     def _transport_security(self) -> TransportSecuritySettings | None:
         """FastMCP's DNS-rebinding protection (Host header allowlist) only fits the loopback case; behind a proxy

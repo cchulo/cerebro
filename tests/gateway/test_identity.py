@@ -35,6 +35,17 @@ class TestNone(IdentityProviderContract):
         assert p.subject == "me" and p.groups == {"everyone", "admin"} and p.token_scopes == TokenScope.all()
         assert p.issuer is None and p.kind == "user"
 
+    async def test_trusted_network_from_the_provisioner_accepts_any_peer(self, adapter, monkeypatch):
+        """Inside a workload the peer is the bridge / the Service: the provisioner vouches for the network."""
+        monkeypatch.setenv("CEREBRO_TRUSTED_NETWORK", "1")
+        assert (await adapter.resolve(REMOTE)).subject == "me"
+        monkeypatch.setenv("CEREBRO_TRUSTED_NETWORK", "0")
+        with pytest.raises(Unauthenticated, match="loopback"):
+            await adapter.resolve(REMOTE)
+        monkeypatch.delenv("CEREBRO_TRUSTED_NETWORK")
+        with pytest.raises(Unauthenticated, match="loopback"):
+            await adapter.resolve(REMOTE)
+
     async def test_allow_remote_requires_the_static_token(self, make_config, make_ctx):
         cfg = make_config(identity={"mode": "none", "allow_remote": True, "principal": {"subject": "me"}})
         a = registry.build("identity", "none", {}, make_ctx(cfg, CEREBRO_TOKEN="s3cret"))

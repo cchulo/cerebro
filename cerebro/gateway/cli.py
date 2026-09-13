@@ -2,9 +2,11 @@
 
     cerebro gateway serve [-c cerebro.yaml] [--log-level info]
 
-Loads the config, builds every adapter once (Gateway.from_config) and serves the Starlette app with uvicorn on
-gateway.host:gateway.port, listening on $CEREBRO_GATEWAY_BIND when the provisioner sets it (a workload must
-listen on 0.0.0.0 for its published port); identity.mode none forces 127.0.0.1 unless identity.allow_remote.
+Loads the config, builds every adapter once (Gateway.from_config) and serves the Starlette app with uvicorn:
+clients reach it at gateway.host:gateway.port; the process listens on $CEREBRO_GATEWAY_BIND (the provisioner sets
+0.0.0.0 inside a workload, whose published port cannot reach a loopback listener), else gateway.bind, else
+gateway.host. identity.mode none forces 127.0.0.1 unless identity.allow_remote or, inside a workload, the
+provisioner's $CEREBRO_TRUSTED_NETWORK (see cerebro.adapters.identity.none).
 """
 from __future__ import annotations
 import argparse

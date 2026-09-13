@@ -185,7 +185,11 @@ class SecretsConfig(BaseModel):
 
 
 class GatewayConfig(BaseModel):
-    host: str = "127.0.0.1"
+    host: str = Field(default="127.0.0.1", description="where clients reach the gateway: the bind address on a host, "
+                                                       "the interface compose publishes the port on")
+    bind: str | None = Field(default=None, description="address the process itself listens on; None = host. Inside a "
+                                                       "workload the provisioner sets $CEREBRO_GATEWAY_BIND=0.0.0.0 "
+                                                       "(the same thing) so the published port reaches it")
     port: int = 8090
     path: str = "/mcp"
     public_url: str | None = Field(default=None, description="URL clients use; the RFC 8707 resource identifier")
