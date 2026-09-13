@@ -451,8 +451,9 @@ for each vertical slice below.
 
 ## 12. Proposal: memory partitioned by scope set (not implemented)
 
-Raised 2026-09-13, after team banks were turned off by default because a member with wider access can write what they
-learned elsewhere into a bank their narrower teammates read. The idea below closes that without giving up shared memory.
+Raised 2026-09-13. Today's team banks (`team-<group>`, one per IdP group, still the shipped behaviour) let a member with
+wider access write what they learned elsewhere into a bank their narrower teammates read. The idea below closes that
+without giving up shared memory. Nothing changes until the instance-count question below is settled.
 
 ### The model
 
