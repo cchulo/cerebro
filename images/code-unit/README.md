@@ -4,12 +4,15 @@ One image for a code unit: [TokenSave](https://github.com/aovestdipaperino/token
 release tarball), ripgrep, git, and the cerebro bridge (`cerebro.bridge`). It runs as the unit (bridge on port 8045)
 and as the unit's index job.
 
+The tag is `cerebro/code-unit:<version>`, `<version>` being the cerebro package version (`pyproject.toml`; the
+tokensave adapter names that tag in its UnitSpec and the provisioner builds it on the first `up`).
+
 ```
-docker build -f images/code-unit/Dockerfile -t cerebro/code-unit:2.0.0a0 .        # from the repository root
+docker build -f images/code-unit/Dockerfile -t cerebro/code-unit:<version> .        # from the repository root
 docker run --rm -e CEREBRO_UNIT=code-public \
   -e CEREBRO_REPOS='[{"url":"https://github.com/pallets/click.git","branches":[]}]' \
-  -v code-public:/workspace cerebro/code-unit:2.0.0a0 cerebro index run --unit code-public
-docker run --rm -p 8045:8045 -e CEREBRO_UNIT=code-public -e CEREBRO_REPOS='[...]' -v code-public:/workspace cerebro/code-unit:2.0.0a0
+  -v code-public:/workspace cerebro/code-unit:<version> cerebro index run --unit code-public
+docker run --rm -p 8045:8045 -e CEREBRO_UNIT=code-public -e CEREBRO_REPOS='[...]' -v code-public:/workspace cerebro/code-unit:<version>
 curl -s localhost:8045/.well-known/cerebro-capabilities
 ```
 

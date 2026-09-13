@@ -2,7 +2,7 @@
 
 Scope config:   docs: { confluence: { spaces: [ENG, DOCS] } }        one entry drives ingest AND fallback
 Env:            CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_TOKEN     (Server/DC: CONFLUENCE_PERSONAL_TOKEN for mcp-atlassian)
-live overrides: live: { confluence: { enabled: true, via: mcp | rest, url: ..., auth_env: ..., fallback: true } }  (all optional)
+live overrides: sources: { confluence: { live: { enabled: true, via: mcp | rest, url: ..., auth_env: ..., fallback: true } } }  (all optional)
 Webhook filter: {"space": "ENG"}
 
 Pages with page-level read restrictions are never indexed nor served: the space's scope is not a valid ACL for them.

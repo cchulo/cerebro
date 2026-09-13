@@ -13,6 +13,8 @@ COPY cerebro ./cerebro
 RUN pip install --no-cache-dir '.[gateway]'
 COPY plugins ./plugins
 EXPOSE 8090
+# /health on the port the gateway serves: $CEREBRO_GATEWAY_PORT (the provisioner sets it), else gateway.port from
+# the mounted cerebro.yaml; CEREBRO_HEALTH_URL overrides the whole URL.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD python -c "import os,urllib.request;u=os.environ.get('CEREBRO_HEALTH_URL','http://127.0.0.1:8090/health');urllib.request.urlopen(u,timeout=4)" || exit 1
+  CMD python -c "import os,urllib.request;p=os.environ.get('CEREBRO_GATEWAY_PORT') or str(__import__('cerebro.core',fromlist=['load_config']).load_config().gateway.port);urllib.request.urlopen(os.environ.get('CEREBRO_HEALTH_URL','http://127.0.0.1:%s/health'%p),timeout=4)" || exit 1
 CMD ["cerebro", "gateway", "serve"]

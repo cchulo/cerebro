@@ -3,7 +3,7 @@
     cerebro provision render   [-c cerebro.yaml] [--target compose|kubernetes] [-o deploy/generated]
     cerebro provision up       [unit ...]    render, then start every unit (or only the listed ones)
     cerebro provision down     [--volumes]   stop and remove; --volumes also deletes the data
-    cerebro provision status   [unit ...]
+    cerebro provision status   [unit ...]    ready | starting | stopped | absent per unit, from the target's own state
     cerebro provision job      <name> [--wait]
     cerebro provision plan                   print the units and jobs without rendering
     cerebro provision operator               the idle-TTL operator (kubernetes target)
@@ -159,7 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     add("plan", help="print units and jobs").set_defaults(fn=cmd_plan)
     up = add("up", help="render + start units"); up.add_argument("units", nargs="*"); up.set_defaults(fn=cmd_up)
     down = add("down", help="stop and remove"); down.add_argument("--volumes", action="store_true"); down.set_defaults(fn=cmd_down)
-    st = add("status"); st.add_argument("units", nargs="*"); st.set_defaults(fn=cmd_status)
+    st = add("status", help="ready | starting | stopped | absent per unit (all, or the listed ones), from the target's own state")
+    st.add_argument("units", nargs="*"); st.set_defaults(fn=cmd_status)
     job = add("job", help="run a job now"); job.add_argument("name"); job.add_argument("--wait", action="store_true"); job.set_defaults(fn=cmd_job)
     add("operator", help="idle-TTL operator (kubernetes)").set_defaults(fn=cmd_operator)
     args = p.parse_args(argv)
