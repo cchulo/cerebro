@@ -11,6 +11,9 @@ Secrets: a unit's `secret_env` names become `NAME: ${NAME}` in the service envir
 other env values are left as they are; `docker compose --env-file secrets.env` substitutes them at run time, so the
 rendered file never holds a value. Run `docker compose` with that env file (the CLI does) or the variables are empty.
 
+Builds: `UnitSpec.build` names the directory holding the Dockerfile (images/gateway); the context is the repository
+root, because the Dockerfiles COPY pyproject.toml / cerebro / plugins from there.
+
 Ports: only the gateway is published (gateway.host:gateway.port, 127.0.0.1 by default). Engines, Postgres, Ollama
 and MCP upstreams are reachable on the compose network only.
 
@@ -127,8 +130,8 @@ class Adapter(Provisioner):
         is_unit = isinstance(spec, UnitSpec)
         labels = labels_for(spec, self.project)
         svc: dict = {"image": self._image(spec)}
-        if spec.build:
-            svc["build"] = {"context": self._rel(spec.build)}
+        if spec.build:                                # images/<x>/Dockerfile builds from the repository root
+            svc["build"] = {"context": self._rel("."), "dockerfile": f"{spec.build.rstrip('/')}/Dockerfile"}
         svc["restart"] = "unless-stopped" if is_unit else "no"
         if spec.command:
             svc["entrypoint"] = list(spec.command)

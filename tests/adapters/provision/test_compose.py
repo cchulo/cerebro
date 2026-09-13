@@ -102,7 +102,8 @@ def test_labels_and_config_mounts(rendered, tmp_path):
     assert doc["services"]["docs-public"]["labels"]["cerebro.io/port"] == "9621"
     gw = doc["services"]["gateway"]
     assert "../../cerebro.yaml:/config/cerebro.yaml:ro" in gw["volumes"] and "../../plugins:/plugins:ro" in gw["volumes"]
-    assert gw["build"] == {"context": "../../images/gateway"} and gw["image"] == "cerebro/gateway"
+    assert gw["build"] == {"context": "../..", "dockerfile": "images/gateway/Dockerfile"} and gw["image"] == "cerebro/gateway"
+    assert doc["services"]["index-code-public"]["build"] == {"context": "../..", "dockerfile": "images/code-unit/Dockerfile"}
     assert "../..:/workspace:ro" in doc["services"]["scheduler"]["volumes"]
     assert doc["name"] == "cerebro" and doc["networks"]["default"]["labels"]["cerebro.io/project"] == "cerebro"
 
