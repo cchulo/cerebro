@@ -16,3 +16,4 @@ docker/compose.generated.yaml
 .demo/
 .DS_Store
 .claude/
+.cursor/
