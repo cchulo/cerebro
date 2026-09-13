@@ -34,8 +34,9 @@ replaceable engines and thousands of users.
 3. **Scope stays the isolation unit.** A graph index merges its inputs, so the boundary must be the index. That
    argument (docs/ACCESS-CONTROL.md) survives the redesign unchanged. What becomes configurable is the *provisioning
    unit* underneath a scope: one workload per scope, or one per repository.
-4. **Identity is a contract, not a header.** A request is resolved to a `Principal` by an identity provider adapter.
-   OAuth 2.1 bearer tokens are the default; trusted proxy headers remain as a second adapter for the SSO-edge deployment.
+4. **Identity is a contract, not a header.** A request is resolved to a `Principal` by an identity adapter. The
+   gateway is always the OAuth 2.1 resource server; who mints tokens is a mode: nobody (single user), a builtin server
+   the stack runs, or the organisation's IdP. Trusted proxy headers remain as a legacy adapter.
 5. **One config file, secrets excluded.** `cerebro.yaml` is the only thing an operator edits. It references secrets
    by name; it never contains them. Everything currently generated is derived from it by the provisioner.
 6. **Nothing leaves the boundary except through the inference adapter.** The org-control rule from v1 stays: any
@@ -191,25 +192,63 @@ handle several roots in one call (TokenSave's `graph_root` is that).
 
 ## 6. Identity and authorization
 
-The gateway becomes an **OAuth 2.1 resource server** exactly as the MCP authorization specification describes:
+Two roles, kept apart on purpose:
 
-- `GET /.well-known/oauth-protected-resource` (RFC 9728) names the authorization server(s) and the scopes
-- unauthenticated requests get `401` with `WWW-Authenticate: Bearer resource_metadata="..."`
-- tokens are validated for audience (RFC 8707 resource indicator) and signature (JWKS) or by introspection (RFC 7662)
-- the gateway issues nothing itself
+- The gateway is always the **resource server**. It receives a bearer token, validates it, turns it into a
+  `Principal`, and asks `AccessPolicy` what that principal may see. `list_scopes` (plus a new `whoami`) shows the
+  result to the agent. This code path is identical no matter who issued the token.
+- The **authorization server**, the thing users log into and that mints tokens, is a deployment choice with three
+  modes. The gateway never mints tokens itself.
 
-The authorization server is external and swappable: Keycloak, Authentik, Dex, Okta, Entra, whatever the org runs.
-"Support OAuth 2.0" therefore means implementing the resource-server side well, plus a policy layer, not writing an
-identity server.
+| `identity.mode` | Who mints tokens | Meant for | What the stack runs |
+|---|---|---|---|
+| `none` | nobody | one person on their own machine | nothing. Every request resolves to the fixed `principal:` from config with every grant. The gateway binds to loopback unless `allow_remote: true`, which then requires a static bearer token so a LAN exposure is never open. |
+| `builtin` | an authorization server the stack provisions | a team self-hosting with no IdP | one shared unit running an off-the-shelf server; users, groups and passkeys in the shared Postgres; `users:` from `cerebro.yaml` seeded on first start |
+| `external` | the organisation's identity provider | enterprises | nothing extra. Protected-resource metadata points at the issuer; groups come from a claim or from userinfo |
 
-`IdentityProvider` adapters:
+`builtin` and `external` run the same gateway code with a different issuer URL. That is the point: the builtin server
+is a convenience, not a second security model.
 
-| type | Use | Principal from |
+### What "modern and standard" means today
+
+The MCP authorization specification (2025-11-25 revision, extended in 2026) fixes the list. The gateway implements
+the MUSTs; the builtin server has to be chosen so it satisfies the SHOULDs.
+
+| Standard | Role | Where it lands |
 |---|---|---|
-| `oauth2_jwt` | default; MCP clients that speak the spec (Claude Code, Cursor do) | JWT claims: `sub`, groups claim (configurable), `scope` |
-| `oauth2_introspect` | opaque tokens | introspection response |
-| `trusted_headers` | behind oauth2-proxy / Caddy OIDC, the v1 model | `X-Forwarded-User`, `X-Forwarded-Groups` |
-| `static` | tests and the demo | a YAML map of tokens to principals |
+| OAuth 2.1 with PKCE | baseline; implicit and password grants are gone | every mode |
+| RFC 9728 Protected Resource Metadata | MUST: `/.well-known/oauth-protected-resource` and the 401 challenge | gateway |
+| RFC 8414 Authorization Server Metadata | discovery of the issuer's endpoints | builtin / external server |
+| RFC 8707 Resource Indicators | tokens are minted *for this gateway*; any other audience is rejected | gateway validates, server must honour |
+| Client ID Metadata Documents (CIMD) | SHOULD, the preferred way an MCP client identifies itself: `client_id` is a URL to a JSON document | builtin server must support; external is the org's IdP's job |
+| RFC 7591 Dynamic Client Registration | MAY, deprecated in the spec; fallback for clients that only speak DCR | builtin server |
+| Enterprise-Managed Authorization (identity-assertion grant, "cross-app access") | the IdP mints the MCP token without a per-user redirect flow | external mode; the gateway only validates what the IdP issues |
+| Passkeys (WebAuthn) | user login at the builtin server | builtin server |
+| RFC 9449 DPoP | sender-constrained tokens, optional hardening | later, gateway and server |
+| RFC 8693 Token Exchange | per-user tokens toward engines instead of shared service credentials | later; engines use service credentials today |
+| SCIM 2.0 | push groups from an enterprise IdP into the builtin server | optional, builtin server |
+
+Client registration (CIMD, DCR) happens between the MCP client and the authorization server; the gateway never sees
+it. That is why the builtin server choice matters more than any gateway code here.
+
+### Choosing the builtin server
+
+Do not write one. An authorization server is where security bugs concentrate, and maintained ones with permissive
+licences exist. Criteria: OAuth 2.1 and OIDC, RFC 8414, RFC 8707, CIMD or at least DCR, passkeys, Postgres storage,
+a footprint a laptop tolerates. Candidates to verify against that list: Keycloak (Apache-2.0, heaviest, most complete),
+Authentik, Ory Hydra with Kratos for login. The adapter is `AuthorizationServer` with a unit template, so the
+provisioner runs it like any engine, plus `seed(users, groups)`. Picking the first implementation is an open decision
+in section 11.
+
+### Identity adapters in the gateway
+
+| type | Principal from |
+|---|---|
+| `bearer_jwt` | JWT claims: `sub`, a configurable groups claim, `scope`; keys from the issuer's JWKS (builtin and external) |
+| `bearer_introspect` | RFC 7662 introspection, for opaque tokens |
+| `none` | the fixed `principal:` in config |
+| `trusted_headers` | `X-Forwarded-User` / `X-Forwarded-Groups` behind a proxy that does the OIDC flow; the v1 model, kept for orgs whose edge already works this way |
+| `static` | a YAML map of tokens to principals, for tests and the demo |
 
 Token scopes are per capability: `cerebro:docs.read`, `cerebro:code.read`, `cerebro:memory.read`,
 `cerebro:memory.write`, `cerebro:admin`. Every tool declares the scope it needs; the gateway hides tools the token
@@ -227,12 +266,17 @@ caller, as before), and revocation latency is the token lifetime unless introspe
 version: 2
 
 identity:
-  type: oauth2_jwt
+  mode: external            # none | builtin | external
   issuer: https://sso.internal/realms/eng
   audience: https://context.internal/mcp
   groups_claim: groups
-  # type: trusted_headers  { user_header: X-Forwarded-User, groups_header: X-Forwarded-Groups }
-
+  token_validation: jwks    # jwks | introspection
+  # mode: none              # one user at home: no tokens, gateway on 127.0.0.1
+  # principal: { subject: me, groups: [everyone, admin] }
+  # mode: builtin           # the stack runs an authorization server as a unit
+  # server: { type: keycloak }
+  # users: [{ name: alice, groups: [payments-team] }]   # seeded once; passkey set at first login
+  # legacy: { type: trusted_headers, user_header: X-Forwarded-User, groups_header: X-Forwarded-Groups }
 policy:
   type: groups            # groups -> scopes, from `scopes:` below
   always_groups: [everyone]
@@ -331,8 +375,9 @@ Each step keeps `make demo` working and lands as its own commit.
 
 - **Unit granularity default**: per scope (fewer pods, cross-repo graph inside a scope) or per repo (finest
   isolation, most pods)? I recommend per scope as the default with per-repo opt-in.
-- **Authorization server for the pilot**: Keycloak is the safest self-hosted choice for the demo; if the org already
-  runs one, name it so the JWT adapter is verified against the real claim shape.
+- **Builtin authorization server**: Keycloak, Authentik or Ory, verified against the CIMD / passkey / RFC 8707
+  checklist in section 6 before the choice is final. If your org already runs an IdP, name it so the JWT adapter is
+  verified against the real claim shape too.
 - **Docs default engine**: keep LightRAG, or make retrieval-only the default and LightRAG the opt-in? The latter makes
   first deployments cheap and matches what you asked for earlier.
 - **Language of the Kubernetes provisioner**: Python `kopf` first, Go later, or Go from the start?
