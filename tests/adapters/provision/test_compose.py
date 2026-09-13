@@ -108,6 +108,18 @@ def test_labels_and_config_mounts(rendered, tmp_path):
     assert doc["name"] == "cerebro" and doc["networks"]["default"]["labels"]["cerebro.io/project"] == "cerebro"
 
 
+def test_endpoint_inside_the_stack_comes_from_the_environment(rendered, tmp_path, monkeypatch):
+    """Gateway and ingest containers have no rendered file: the plan's table travels as $CEREBRO_UNIT_PORTS."""
+    _, _, doc = rendered
+    table = doc["services"]["gateway"]["environment"]["CEREBRO_UNIT_PORTS"]
+    assert "docs-public=9621" in table.split(",") and "code-public=8045" in table.split(",") and "memory=8888" in table.split(",")
+    assert doc["services"]["ingest"]["environment"]["CEREBRO_UNIT_PORTS"] == table
+    monkeypatch.setenv("CEREBRO_UNIT_PORTS", table)
+    inside = compose.Adapter({"output_dir": str(tmp_path / "nowhere")}, rendered[0].ctx)
+    assert inside.endpoint("docs-public") == "http://docs-public:9621" and inside.endpoint("memory") == "http://memory:8888"
+    assert inside.endpoint("unknown") == "http://unknown:8080"
+
+
 def test_endpoint_uses_rendered_ports(rendered):
     adapter, files, _ = rendered
     assert adapter.endpoint("docs-public") == "http://docs-public:9621" and adapter.endpoint("postgres") == "http://postgres:5432"
@@ -125,6 +137,19 @@ def test_command_line_and_profiles(rendered, tmp_path):
     (tmp_path / "secrets.env").write_text("POSTGRES_PASSWORD=x\n")
     cmd = adapter.command("run", "--rm", "index-code-public", profiles=["jobs"])
     assert cmd[5:] == ["deploy/generated/compose.yaml", "--env-file", "secrets.env", "--profile", "jobs", "run", "--rm", "index-code-public"]
+
+
+def test_extra_compose_files_reach_every_command(rendered):
+    adapter, _, _ = rendered
+    extra = compose.Adapter({"output_dir": "deploy/generated", "compose_files": ["tests/e2e/compose.mocks.yaml"]}, adapter.ctx)
+    cmd = extra.command("up", "-d", "ingest")
+    assert cmd[5:9] == ["deploy/generated/compose.yaml", "-f", "tests/e2e/compose.mocks.yaml", "up"]
+    units, jobs = plan(adapter.ctx.config, adapter.ctx, adapters=fake_adapters(adapter.ctx))
+    files = extra.render(units, jobs)
+    text = next(iter(files.values()))
+    assert "-f deploy/generated/compose.yaml -f tests/e2e/compose.mocks.yaml" in text.splitlines()[1]
+    crontab = yaml.safe_load(text)["configs"]["scheduler-crontab"]["content"]
+    assert "-f deploy/generated/compose.yaml -f tests/e2e/compose.mocks.yaml --env-file" in crontab
 
 
 def test_parse_ps_accepts_both_formats():
