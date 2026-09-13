@@ -5,7 +5,8 @@
 Base infrastructure (postgres, ollama when the inference endpoints point at it, gateway, ingest) plus what every
 adapter contributes through `units()` / `jobs()`: the engine adapters from `engines.{docs,code,memory}`, the
 authorization server in `identity.mode: builtin`, and one `mcp-<plugin>` unit per source plugin that declares an
-`McpUpstream` for its live part.
+`McpUpstream` for its live part and that at least one scope lists under `docs:` (see mcp_units for the `sources.
+<plugin>.live` switches).
 
 Conventions every adapter can rely on (renderers implement them, tests pin them):
 
@@ -108,7 +109,7 @@ def base_units(config: Config, engine_units: list[UnitSpec]) -> list[UnitSpec]:
     common_env = {"CEREBRO_CONFIG": CONFIG_MOUNT, "CEREBRO_PLUGINS_DIR": PLUGINS_MOUNT,
                   UNIT_PORTS_ENV: unit_ports_value(engine_units)}      # the Locator inside the stack has no rendered file
     engines = [u.name for u in engine_units]
-    gateway_env = {**common_env, "PORT": str(config.gateway.port), "CEREBRO_GATEWAY_BIND": "0.0.0.0"}
+    gateway_env = {**common_env, "CEREBRO_GATEWAY_PORT": str(config.gateway.port), "CEREBRO_GATEWAY_BIND": "0.0.0.0"}
     if config.identity.mode == "none":
         # the peer inside a workload is the bridge / the Service, never loopback: the network is the isolation
         # (compose publishes the port on 127.0.0.1 only, kubernetes exposes a ClusterIP reached by port-forward)
@@ -156,7 +157,8 @@ def adapter_instances(config: Config, ctx: AdapterContext) -> list:
 
 
 def mcp_units(config: Config, plugins_dir: str | pathlib.Path | None = None) -> list[UnitSpec]:
-    """One `mcp-<plugin>` unit per plugin with an McpUpstream and a live part, unless cerebro.yaml turns it off:
+    """One `mcp-<plugin>` unit per plugin that has an McpUpstream and a live part AND that some scope lists under
+    `docs:` (a plugin nobody references has nothing to serve), unless cerebro.yaml turns it off:
 
         sources:
           confluence: { live: { enabled: false } }        # no live fallback at all
@@ -167,8 +169,9 @@ def mcp_units(config: Config, plugins_dir: str | pathlib.Path | None = None) -> 
     d = pathlib.Path(plugins_dir or config.gateway.plugins_dir)
     if not d.is_dir():
         return out
+    referenced = set(config.source_names())
     for name, plugin in discover(d).items():
-        if not (plugin.mcp and plugin.live):
+        if not (plugin.mcp and plugin.live) or name not in referenced:
             continue
         live = (config.sources.get(name) or {}).get("live") or {}
         if live.get("enabled", True) is False or live.get("via", "mcp") == "rest" or live.get("url"):

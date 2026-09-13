@@ -51,8 +51,8 @@ cp cerebro.example.yaml cerebro.yaml
 cp secrets.env.example secrets.env                 # fill POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY
 ```
 
-In `cerebro.yaml` trim `scopes:` to what you have and turn off the Confluence upstream if you have no Confluence
-(`sources: { confluence: { live: { enabled: false } } }`).
+In `cerebro.yaml` trim `scopes:` to what you have; a source no scope lists under `docs:` (Confluence, say) is
+neither synced nor given its `mcp-<plugin>` upstream unit.
 
 ```sh
 .venv/bin/cerebro validate                          # the resolved scopes and code units

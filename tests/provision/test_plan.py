@@ -6,12 +6,12 @@ from cerebro.provision import plan as planmod
 from cerebro.provision.common import volume_key
 from cerebro.provision.plan import plan, resolve_env_refs
 from tests.conftest import ROOT
-from tests.provision.fakes import FakeDocs, canary_ctx, fake_adapters, write_plugins
+from tests.provision.fakes import FakeDocs, canary_ctx, fake_adapters, reference_plugin, write_plugins
 
 
 @pytest.fixture
 def planned(example_config, tmp_path):
-    ctx = canary_ctx(example_config)
+    ctx = canary_ctx(reference_plugin(example_config))
     return plan(example_config, ctx, adapters=fake_adapters(ctx), plugins_dir=write_plugins(tmp_path / "plugins"))
 
 
@@ -42,6 +42,7 @@ def test_gateway_listens_inside_the_workload_and_trusts_the_network_only_in_mode
     gw = next(u for u in plan(example_config, ctx, adapters=[])[0] if u.name == "gateway")
     assert example_config.identity.mode == "none"
     assert gw.env["CEREBRO_GATEWAY_BIND"] == "0.0.0.0" and gw.env["CEREBRO_TRUSTED_NETWORK"] == "1"
+    assert gw.env["CEREBRO_GATEWAY_PORT"] == str(example_config.gateway.port), "the image's HEALTHCHECK reads it"
     for identity in ({"mode": "static", "tokens": {"t": {"subject": "a"}}}, {"mode": "external", "issuer": "https://i", "audience": "a"}):
         cfg = example_config.model_copy(deep=True)
         cfg.identity = type(cfg.identity).model_validate(identity)
@@ -79,18 +80,21 @@ def test_resolve_env_refs_keeps_declared_defaults_as_secrets():
 
 
 def test_mcp_units_from_plugins(example_config, tmp_path):
-    ctx = canary_ctx(example_config)
     pdir = write_plugins(tmp_path / "plugins")
-    units, _ = plan(example_config, ctx, adapters=[], plugins_dir=pdir)
+    unreferenced = example_config.model_copy(deep=True)
+    units, _ = plan(unreferenced, canary_ctx(unreferenced), adapters=[], plugins_dir=pdir)
+    assert "mcp-fakemcp" not in {u.name for u in units}, "no scope lists fakemcp under docs: nothing to serve"
+    cfg = reference_plugin(example_config.model_copy(deep=True), scope="payments")
+    ctx = canary_ctx(cfg)
+    units, _ = plan(cfg, ctx, adapters=[], plugins_dir=pdir)
     mcp = next(u for u in units if u.name == "mcp-fakemcp")
     assert mcp.role == "mcp" and mcp.image == "ghcr.io/example/mcp:1.0" and mcp.http_port == 9000 and mcp.args == ["--stateless"]
     assert mcp.env == {"FAKE_URL": "http://fake.internal", "FAKE_TOKEN": "${FAKE_TOKEN}"}
     assert mcp.secret_env == ["FAKE_TOKEN"] and mcp.labels["cerebro.io/plugin"] == "fakemcp"
     for live in ({"enabled": False}, {"via": "rest"}, {"url": "http://elsewhere:9000/mcp"}):
-        example_config.sources["fakemcp"] = {"live": live}
-        units, _ = plan(example_config, ctx, adapters=[], plugins_dir=pdir)
+        cfg.sources["fakemcp"] = {"live": live}
+        units, _ = plan(cfg, ctx, adapters=[], plugins_dir=pdir)
         assert "mcp-fakemcp" not in {u.name for u in units}, live
-    example_config.sources.pop("fakemcp")
 
 
 def test_missing_adapters_are_skipped_with_a_note(example_config, caplog):

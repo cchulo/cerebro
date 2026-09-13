@@ -94,3 +94,9 @@ def write_plugins(directory: pathlib.Path) -> pathlib.Path:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "fakemcp.py").write_text(PLUGIN_SOURCE)
     return directory
+
+
+def reference_plugin(config, name: str = "fakemcp", scope: str = "public"):
+    """List the plugin under a scope's docs: the plan only runs `mcp-<plugin>` for plugins some scope references."""
+    config.scopes[scope].docs.setdefault(name, {})
+    return config

@@ -5,7 +5,7 @@ from cerebro.core.contracts.provision import UnitRef
 from cerebro.provision.plan import plan
 from tests.conftest import ROOT
 from tests.contracts.provision import ProvisionerContract
-from tests.provision.fakes import CANARY, canary_ctx, fake_adapters, write_plugins
+from tests.provision.fakes import CANARY, canary_ctx, fake_adapters, reference_plugin, write_plugins
 
 
 class TestComposeContract(ProvisionerContract):
@@ -20,7 +20,7 @@ def rendered(example_config, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     shutil.copy(ROOT / "cerebro.example.yaml", tmp_path / "cerebro.yaml")
     write_plugins(tmp_path / "plugins")
-    ctx = canary_ctx(example_config)
+    ctx = canary_ctx(reference_plugin(example_config))
     units, jobs = plan(example_config, ctx, adapters=fake_adapters(ctx))
     adapter = compose.Adapter({"output_dir": "deploy/generated", "config_path": "cerebro.yaml"}, ctx)
     files = adapter.render(units, jobs)

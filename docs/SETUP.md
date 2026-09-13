@@ -50,7 +50,7 @@ the CLIs, the env file) when the file is loaded.
 | `gateway.public_url` | none | the URL clients use; it is the OAuth resource identifier (`aud`) |
 | `gateway.state_type` | `json_file` | the ingest's `SyncState` adapter: `json_file` (one replica) or `postgres` |
 | `gateway.plugins_dir`, `concurrency` | `plugins`, `8` | where `*.py` plugins live; parallel unit calls per request |
-| `sources.<plugin>` | `{}` | non-secret plugin options; `sources.<plugin>.live` overrides the live part (`enabled`, `fallback`, `via`, `url`) |
+| `sources.<plugin>` | `{}` | non-secret plugin options; `sources.<plugin>.live` overrides the live part (`enabled`, `fallback`, `via`, `url`). An `mcp-<plugin>` upstream unit is planned only for plugins that declare one and that some scope lists under `docs:` |
 | `scopes.<name>.groups` | `[]` | IdP groups that may read the scope (`everyone` = any authenticated caller) |
 | `scopes.<name>.code.repos` | `[]` | `https://...git` strings (default branch) or `{url, branches: [main, "release/*"]}`; `code.unit` overrides `engines.code.unit` |
 | `scopes.<name>.docs.<plugin>` | `{}` | what of that source belongs here (`confluence: {spaces: [ENG]}`, `git: {globs: [...]}`, `files: {paths: [...]}`, `jama: {projects: [42]}`, `backstage: {}`) |
