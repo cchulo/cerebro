@@ -1,6 +1,6 @@
 # Cerebro v2: everything behind the gateway is a plugin
 
-Status: **proposal**, 2026-09-13. Nothing below is implemented; the current stack keeps working while this is discussed.
+Status: **proposal**, 2026-09-13. Nothing below is implemented. The v1 stack lives on as the `poc` branch; `main` is v2 from here (section 10).
 
 The one-line version: keep the gateway as the single MCP endpoint and the *scope* as the isolation unit, but turn every
 engine (docs index, code intelligence, memory, identity, inference, provisioning) into an implementation of a small
@@ -352,24 +352,33 @@ tests/                          contract tests every adapter must pass, plus the
 Adapters are selected by `type:` and resolved through entry points (`cerebro.adapters.docs = lightrag = adapters.docs.lightrag:LightRAG`),
 so an out-of-tree adapter is a pip package, the same way the live loader already accepts `module:Class`.
 
-## 10. Migration, in order
+## 10. Branches and build order
 
-Each step keeps `make demo` working and lands as its own commit.
+**Branching.** Today's `main` becomes the `poc` branch, frozen as the reference for the v1 stack: the demo, the
+verified engine facts (README "Verified versions") and the access-control argument. Bug fixes only, and only if
+someone is running it. `main` continues as v2 from the same commit; nothing is rewritten, v2 replaces the tree
+commit by commit and v1 code is deleted when its replacement lands, not before. An orphan `main` is the alternative
+if a clean history is preferred; keeping it is recommended because the PoC's `git log` explains many engine quirks
+that the adapters will inherit.
 
-1. **`core` + config.** Add the contracts and the `cerebro.yaml` schema; write a converter from the five v1 files.
-   No behaviour change.
-2. **Identity adapters.** Extract `acl.py` into `IdentityProvider` + `AccessPolicy`; `trusted_headers` is the port,
-   `oauth2_jwt` is new, with `/.well-known/oauth-protected-resource` and the 401 challenge. Smoke test gains a token mode.
-3. **Memory and docs adapters.** Move Hindsight and LightRAG code out of the gateway and ingest into `adapters/`;
-   add `pgvector` retrieval-only. Ingest state moves to Postgres (`SyncState`), removing the single-replica limit.
-4. **Code adapters + unit manifest.** Port CodeGraphContext and Sourcebot behind `CodeIntelligence`; add the
-   capability manifest to the bridge image. `search_code` and `code_graph` become capability-driven.
-5. **Provisioner.** Replace `gen-scopes.py` with the compose provisioner (same output, new source of truth), then the
-   Kubernetes provisioner with on-demand `ensure()` and idle TTL.
-6. **TokenSave adapter and pilot.** New image (binary + bridge + ripgrep), contract tests, run the demo with
-   `engines.code.type: tokensave`, compare against CodeGraphContext on the demo prompts.
-7. **Retire** whatever the pilot makes redundant; update ENGINES.md and the README "what the model sees" table from
-   adapter declarations.
+Dropping the "every step keeps `make demo` working" constraint is the main reason to split the branches: v2 can be
+built contracts-first instead of being refactored out of the PoC. The PoC's smoke test is still the acceptance bar
+for each vertical slice below.
+
+1. **Skeleton.** The layout in section 9, the `core` contracts, the `cerebro.yaml` schema with loader and JSON schema,
+   a contract-test harness every adapter must pass.
+2. **Empty gateway.** `identity.mode: none` and `static`, `whoami` and `list_scopes`, no engines. A runnable product.
+3. **Docs slice.** pgvector retrieval-only adapter, the ingest engine with Postgres sync state, the source plugins
+   copied from `poc`. First end-to-end query.
+4. **Memory slice.** Hindsight adapter.
+5. **Identity.** `bearer_jwt` with RFC 9728 metadata and the 401 challenge; the `builtin` server as a provisioned
+   unit; `external` verified against the chosen authorization server. The smoke test gains a token mode.
+6. **Code slice.** `CodeIntelligence`, the bridge image with the capability manifest, CodeGraphContext first because it
+   is known good, then TokenSave; the compose provisioner.
+7. **Kubernetes provisioner.** On-demand `ensure()`, idle TTL, scale to zero.
+8. **Ports.** LightRAG and Sourcebot adapters from `poc`; demo scripts retargeted at `cerebro.yaml`.
+9. **Docs.** README, ENGINES and the "what the model sees" table regenerated from adapter declarations; the `poc`
+   README gets a pointer to `main`.
 
 ## 11. Decisions I would like from you
 
