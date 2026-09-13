@@ -32,6 +32,24 @@ def test_only_the_gateway_publishes_a_port(rendered):
     _, _, doc = rendered
     published = {n for n, s in doc["services"].items() if s.get("ports")}
     assert published == {"gateway"} and doc["services"]["gateway"]["ports"] == ["127.0.0.1:8090:8090"]
+    assert doc["services"]["gateway"]["environment"]["CEREBRO_TRUSTED_NETWORK"] == "1", "mode none: the bridge is the peer"
+
+
+def test_mode_none_is_published_on_loopback_only_and_allow_remote_on_gateway_host(rendered):
+    adapter, _, _ = rendered
+    cfg = adapter.ctx.config.model_copy(deep=True)
+    cfg.gateway.host = "0.0.0.0"
+    assert cfg.identity.mode == "none"
+    ctx = canary_ctx(cfg)
+    units, jobs = plan(cfg, ctx, adapters=[])
+    doc = yaml.safe_load(next(iter(compose.Adapter({"output_dir": "deploy/generated"}, ctx).render(units, jobs).values())))
+    assert doc["services"]["gateway"]["ports"] == ["127.0.0.1:8090:8090"], "no token in this mode: never beyond loopback"
+    cfg.identity.allow_remote = True
+    ctx = canary_ctx(cfg)
+    units, jobs = plan(cfg, ctx, adapters=[])
+    doc = yaml.safe_load(next(iter(compose.Adapter({"output_dir": "deploy/generated"}, ctx).render(units, jobs).values())))
+    assert doc["services"]["gateway"]["ports"] == ["0.0.0.0:8090:8090"], "the explicit LAN option, guarded by CEREBRO_TOKEN"
+    assert "CEREBRO_TRUSTED_NETWORK" in doc["services"]["gateway"]["environment"]
 
 
 def test_secrets_are_env_file_references(rendered):

@@ -37,6 +37,18 @@ def test_base_units_follow_the_conventions(planned, example_config):
     assert [u.name for u in units[:4]] == ["postgres", "ollama", "gateway", "ingest"], "base units first"
 
 
+def test_gateway_listens_inside_the_workload_and_trusts_the_network_only_in_mode_none(example_config):
+    ctx = canary_ctx(example_config)
+    gw = next(u for u in plan(example_config, ctx, adapters=[])[0] if u.name == "gateway")
+    assert example_config.identity.mode == "none"
+    assert gw.env["CEREBRO_GATEWAY_BIND"] == "0.0.0.0" and gw.env["CEREBRO_TRUSTED_NETWORK"] == "1"
+    for identity in ({"mode": "static", "tokens": {"t": {"subject": "a"}}}, {"mode": "external", "issuer": "https://i", "audience": "a"}):
+        cfg = example_config.model_copy(deep=True)
+        cfg.identity = type(cfg.identity).model_validate(identity)
+        gw = next(u for u in plan(cfg, canary_ctx(cfg), adapters=[])[0] if u.name == "gateway")
+        assert gw.env["CEREBRO_GATEWAY_BIND"] == "0.0.0.0" and "CEREBRO_TRUSTED_NETWORK" not in gw.env, identity
+
+
 def test_ollama_only_when_inference_points_at_it(example_config):
     ctx = canary_ctx(example_config)
     cfg = load_config(ROOT / "cerebro.example.yaml", env={"LLM_BASE_URL": "http://models.internal:11434",

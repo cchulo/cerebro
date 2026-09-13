@@ -55,7 +55,7 @@ Who mints that proof is `identity.mode` ([IDENTITY.md](IDENTITY.md)).
 
 | Mode | Identity comes from | Protects against | Does not protect against |
 |---|---|---|---|
-| `none` | the fixed `principal:`; loopback only | anything not on this machine | other processes on the machine; with `allow_remote` anyone without `CEREBRO_TOKEN` |
+| `none` | the fixed `principal:`; loopback only (on a host), or the stack network with the port published on the host's loopback only (provisioned, `CEREBRO_TRUSTED_NETWORK`) | anything not on this machine | other processes on the machine, anything else on the stack network; with `allow_remote` anyone without `CEREBRO_TOKEN` |
 | `static` | a token map in the config | unknown tokens | leaked tokens (no expiry, no revocation); tests and demos only |
 | `builtin` | Keycloak the stack runs; JWTs validated against its JWKS | forged or expired tokens, tokens for another audience, users outside the realm | compromise of the Keycloak admin credentials |
 | `external` | your IdP; JWTs (JWKS) or opaque tokens (introspection) | the same, with your IdP's policies (MFA, lifetime, revocation via introspection) | claims your IdP does not send (groups must arrive in `groups_claim`) |

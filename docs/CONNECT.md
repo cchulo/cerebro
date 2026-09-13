@@ -7,14 +7,15 @@ Engines are never exposed to clients. What the client has to present depends on 
 
 ## Mode `none` (one machine)
 
-Loopback, no token. The gateway must run on the host for this (`cerebro gateway serve`, which binds 127.0.0.1):
+Loopback, no token, whether the gateway runs on the host (`cerebro gateway serve` binds 127.0.0.1) or in the stack
+(`cerebro provision up` publishes the port on the host's 127.0.0.1 only):
 
 ```sh
 claude mcp add --transport http cerebro http://127.0.0.1:8090/mcp --scope user
 ```
 
-With the stack in compose, the gateway runs in a container and needs `identity.allow_remote: true` plus the static
-token (README quick start). Then every client sends it as a header:
+Other machines on your LAN are the explicit option `identity.allow_remote: true` plus the static token
+(README quick start; never publish beyond loopback without it). Then every client sends it as a header:
 
 ```sh
 claude mcp add --transport http cerebro http://127.0.0.1:8090/mcp --scope user \

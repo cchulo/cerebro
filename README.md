@@ -38,22 +38,21 @@ are built from this repository.
 
 ## Quick start: one person, one machine
 
-Identity mode `none` means no tokens and no login. Keep `gateway.host: 127.0.0.1` (the default): that is the host
-interface the port is published on, so only this machine can reach the gateway. Never set it to `0.0.0.0`; that
-publishes the gateway on every interface of the machine. Inside the container the provisioner sets the bind address
-itself. Until mode `none` recognises the container network as local, the compose path also needs `allow_remote`
-with a static token (see [docs/IDENTITY.md](docs/IDENTITY.md)).
+Identity mode `none` means no tokens and no login: every request is the one `identity.principal`. Keep
+`gateway.host: 127.0.0.1` (the default): that is the host interface the port is published on, so only this machine
+reaches it. Never set it to `0.0.0.0`; that publishes the gateway on every interface of the machine. Inside the
+container the provisioner makes the gateway listen on its own interfaces (`CEREBRO_GATEWAY_BIND`) and accept the
+Docker bridge as peer (`CEREBRO_TRUSTED_NETWORK`); nothing else on the network can reach that port
+([docs/IDENTITY.md](docs/IDENTITY.md)).
 
 ```sh
 uv venv .venv && uv pip install -e '.[all]'         # Python 3.12+
 cp cerebro.example.yaml cerebro.yaml
-cp secrets.env.example secrets.env                 # fill POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, CEREBRO_TOKEN
+cp secrets.env.example secrets.env                 # fill POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY
 ```
 
-In `cerebro.yaml` set `identity.allow_remote: true`, leave `gateway.host` at `127.0.0.1`, add `CEREBRO_TOKEN` to
-`secrets.keys`, trim `scopes:` to what you have, and turn off the Confluence upstream if you have no Confluence
-(`sources: { confluence: { live: { enabled: false } } }`). Every request then needs `Authorization: Bearer <CEREBRO_TOKEN>`,
-loopback included.
+In `cerebro.yaml` trim `scopes:` to what you have and turn off the Confluence upstream if you have no Confluence
+(`sources: { confluence: { live: { enabled: false } } }`).
 
 ```sh
 .venv/bin/cerebro validate                          # the resolved scopes and code units
@@ -63,12 +62,16 @@ docker compose -p cerebro -f deploy/generated/compose.yaml exec ollama ollama pu
 docker compose -p cerebro -f deploy/generated/compose.yaml exec ollama ollama pull bge-m3
 .venv/bin/cerebro provision job index-code-public --wait          # clone + index the scope's repositories
 docker compose -p cerebro -f deploy/generated/compose.yaml exec ingest cerebro ingest sync   # documents
-claude mcp add --transport http cerebro http://127.0.0.1:8090/mcp --header "Authorization: Bearer $CEREBRO_TOKEN"
+claude mcp add --transport http cerebro http://127.0.0.1:8090/mcp
 ```
 
 `gpt-oss:20b` needs about 16 GB of RAM on CPU; pick a smaller chat model in `inference.llm.model` for a laptop.
 An Ollama already running on the host: `LLM_BASE_URL=http://host.docker.internal:11434 EMBED_BASE_URL=... cerebro provision up`
 drops the `ollama` unit ([docs/SETUP.md](docs/SETUP.md)).
+
+Reaching it from another machine on your LAN is a deliberate step, not a default: `identity.allow_remote: true`
+with `CEREBRO_TOKEN` in `secrets.env` and `secrets.keys`, then `gateway.host` set to the interface to publish on.
+Every request then needs the token, loopback included; never publish beyond loopback without one.
 
 ## Quick start: a team, builtin Keycloak
 
@@ -129,6 +132,6 @@ the 23 documents 82 s, the smoke test 2 minutes. Commands and timings: [tests/e2
 | mcp-atlassian | `ghcr.io/sooperset/mcp-atlassian:0.23.1` | live as `mcp-confluence` against the mock: `live_search` confined to the caller's spaces, `live_fetch` refusing foreign and restricted pages, `query_docs` fallback |
 | compose provisioner | `docker compose` v2 | live: render, build, up (health waits), job, status, down --volumes; the scheduler service (`docker:27-cli`, busybox crond) rendered only |
 | python `mcp` | `>=1.10,<2` | gateway and bridge tests over streamable HTTP |
-| Gateway and ingest images | `images/gateway`, `images/ingest` | live in the stack with identity mode `static` (five personas, one service token); mode `none` and `allow_remote`: loopback bind inside the container, 401 without the token, MCP initialize with it |
+| Gateway and ingest images | `images/gateway`, `images/ingest` | live in the stack with identity mode `static` (five personas, one service token); mode `none` on compose: published on 127.0.0.1 only, MCP initialize and `whoami` without a token; `allow_remote`: 401 without the token, MCP initialize with it |
 
 `pytest` runs the whole suite (282 tests); the tests that need the TokenSave binary or a Postgres skip without them.

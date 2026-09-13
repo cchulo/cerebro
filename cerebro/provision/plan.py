@@ -20,6 +20,10 @@ Conventions every adapter can rely on (renderers implement them, tests pin them)
     ports         ports[0] is the HTTP port other units talk to; Locator.endpoint(unit) returns http://<unit>:<port>.
                   Gateway and ingest get the table as $CEREBRO_UNIT_PORTS (unit=port,...): inside the stack there is
                   no rendered file to read the ports from.
+    gateway       listens on $CEREBRO_GATEWAY_BIND=0.0.0.0 inside its workload (gateway.host is the publish address);
+                  in identity.mode none it also gets $CEREBRO_TRUSTED_NETWORK=1, because its peer is the bridge or
+                  the Service rather than loopback, and the renderers keep that port on the operator's loopback
+                  (compose: 127.0.0.1 only; kubernetes: ClusterIP, reached by port-forward).
     files         UnitSpec.files / JobSpec.files: mount path -> content; small non-secret files (init scripts).
 """
 from __future__ import annotations
@@ -31,6 +35,7 @@ from ..core.config import Config
 from ..core.context import AdapterContext
 from ..core.contracts.provision import JobSpec, PortSpec, UnitSpec, VolumeSpec
 from ..core.contracts.sources import discover
+from ..adapters.identity.none import TRUSTED_NETWORK_ENV
 from .common import UNIT_PORTS_ENV, label_value, unit_ports_value
 
 log = logging.getLogger("cerebro.provision")
@@ -103,10 +108,14 @@ def base_units(config: Config, engine_units: list[UnitSpec]) -> list[UnitSpec]:
     common_env = {"CEREBRO_CONFIG": CONFIG_MOUNT, "CEREBRO_PLUGINS_DIR": PLUGINS_MOUNT,
                   UNIT_PORTS_ENV: unit_ports_value(engine_units)}      # the Locator inside the stack has no rendered file
     engines = [u.name for u in engine_units]
+    gateway_env = {**common_env, "PORT": str(config.gateway.port), "CEREBRO_GATEWAY_BIND": "0.0.0.0"}
+    if config.identity.mode == "none":
+        # the peer inside a workload is the bridge / the Service, never loopback: the network is the isolation
+        # (compose publishes the port on 127.0.0.1 only, kubernetes exposes a ClusterIP reached by port-forward)
+        gateway_env[TRUSTED_NETWORK_ENV] = "1"
     units.append(UnitSpec(
         name="gateway", role="gateway", image=GATEWAY_IMAGE, build=GATEWAY_BUILD,
-        ports=[PortSpec(port=config.gateway.port)],
-        env={**common_env, "PORT": str(config.gateway.port), "CEREBRO_GATEWAY_BIND": "0.0.0.0"},
+        ports=[PortSpec(port=config.gateway.port)], env=gateway_env,
         secret_env=list(config.secrets.keys), depends_on=["postgres", *engines], labels=dict(labels)))
     units.append(UnitSpec(
         name="ingest", role="ingest", image=INGEST_IMAGE, build=INGEST_BUILD, ports=[PortSpec(port=8080)],

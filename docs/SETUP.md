@@ -26,7 +26,7 @@ may contain `${NAME}` or `${NAME:-default}`, interpolated from the environment w
 | `version` | `2` | schema version; only `2` is accepted |
 | `identity.mode` | `none` | `none`, `static`, `builtin`, `external`; details in [IDENTITY.md](IDENTITY.md) |
 | `identity.principal` | `{subject: local, groups: [everyone, admin]}` | mode `none`: who every request is |
-| `identity.allow_remote` / `static_token_env` | `false` / `CEREBRO_TOKEN` | mode `none`: listen beyond loopback, then every request needs this bearer |
+| `identity.allow_remote` / `static_token_env` | `false` / `CEREBRO_TOKEN` | mode `none`: the explicit LAN option; publish beyond loopback, then every request needs this bearer |
 | `identity.tokens` | `{}` | mode `static`: token to principal map (`subject`, `groups`, `kind`, `token_scopes`) |
 | `identity.issuer`, `audience`, `groups_claim`, `scope_claim` | none, none, `groups`, `scope` | `builtin` and `external`: the OAuth issuer and how claims map; `external` requires issuer and audience |
 | `identity.token_validation`, `jwks_url`, `introspection` | `jwks`, from discovery, none | `introspection` needs `{url?, client_id, client_secret_env}` |
@@ -43,7 +43,8 @@ may contain `${NAME}` or `${NAME:-default}`, interpolated from the environment w
 | `provisioning.target` | `compose` | `compose` or `kubernetes` |
 | `provisioning.project`, `namespace`, `storage_class`, `image_registry` | `cerebro`, `cerebro`, none, none | compose project name and label; k8s namespace; PVC class; prefix for the images cerebro builds |
 | `secrets.source`, `keys` | `env`, `[]` | every `${NAME}` any unit reads; compose takes them from `secrets.env`, kubernetes from the Secret it builds from it |
-| `gateway.host`, `port`, `path` | `127.0.0.1`, `8090`, `/mcp` | the bind address (also the interface compose publishes on) and the MCP path |
+| `gateway.host`, `port`, `path` | `127.0.0.1`, `8090`, `/mcp` | where clients reach the gateway: the bind address on a host, the interface compose publishes the port on (mode `none` without `allow_remote` is always published on `127.0.0.1`); and the MCP path |
+| `gateway.bind` | none (= `host`) | the address the process itself listens on; the provisioner sets the same thing as `CEREBRO_GATEWAY_BIND=0.0.0.0` inside the workload, so you only set it for a gateway you run by hand behind a proxy |
 | `gateway.public_url` | none | the URL clients use; it is the OAuth resource identifier (`aud`) |
 | `gateway.state_type` | `json_file` | the ingest's `SyncState` adapter: `json_file` (one replica) or `postgres` |
 | `gateway.plugins_dir`, `concurrency` | `plugins`, `8` | where `*.py` plugins live; parallel unit calls per request |
@@ -110,9 +111,11 @@ contains, read from `deploy/generated/compose.yaml`:
 - Health checks: `pg_isready` and `ollama list` for the base units; an HTTP probe on `/health` for the rest (compose
   tries curl, wget, then python3 inside the image).
 
-In identity mode `none` a request arriving through the published port comes from the container network, which the
-adapter does not treat as loopback yet; use `allow_remote` with `CEREBRO_TOKEN` as in the README (keeping
-`gateway.host: 127.0.0.1`), or a real identity mode. Do not widen `gateway.host` to `0.0.0.0` to get around it.
+In identity mode `none` the gateway unit gets `CEREBRO_GATEWAY_BIND=0.0.0.0` and `CEREBRO_TRUSTED_NETWORK=1` (its
+peer is the Docker bridge, not loopback) and the port is published on the host's `127.0.0.1` only, whatever
+`gateway.host` says: one machine, no token ([IDENTITY.md](IDENTITY.md)). Reaching it from elsewhere is
+`identity.allow_remote` plus `CEREBRO_TOKEN`, keeping `gateway.host` at `127.0.0.1` unless another machine must
+reach it; never widen `gateway.host` to `0.0.0.0` without the token.
 
 ## 6. Kubernetes
 
@@ -133,7 +136,9 @@ cerebro provision operator                         # the idle-TTL operator (kopf
 - Images: build `images/gateway`, `images/ingest`, `images/code-unit` yourself and make them pullable (set
   `provisioning.image_registry`); `imagePullPolicy: IfNotPresent` is rendered for them.
 - Ingress is yours: every Service is `ClusterIP`. Route your TLS Ingress to `gateway` (and to `auth` in `builtin` mode);
-  never expose engine Services.
+  never expose engine Services. In identity mode `none` there is no Ingress at all: the gateway trusts its network
+  (`CEREBRO_TRUSTED_NETWORK=1`, set by the render), so reach it with
+  `kubectl -n cerebro port-forward svc/gateway 8090:8090` and nothing else.
 - Idle TTL: docs and code Deployments carry `cerebro.io/idle-ttl` (from `engines.<kind>.idle_ttl`); the operator
   compares `cerebro.io/last-used` (stamped by `ensure()` and `touch()`, or the creation time) with it every 60 s and
   patches `replicas: 0`. Waking up is `cerebro provision up <unit>` (or `kubectl scale`): the gateway does not call
@@ -188,7 +193,7 @@ Note the position of `-c`: for `cerebro ingest` it precedes the subcommand. From
 
 | Symptom | Cause |
 |---|---|
-| published gateway port answers nothing, container healthy | identity mode `none` binds loopback inside the container (section 5) |
+| published gateway port answers nothing, container healthy | the gateway was started without the provisioner's env (`CEREBRO_GATEWAY_BIND`, and in mode `none` `CEREBRO_TRUSTED_NETWORK`): re-render with `cerebro provision up` (section 5) |
 | `401 invalid_token` on every call | no or wrong bearer; in `builtin`/`external` the `WWW-Authenticate` header names the metadata URL your client should follow |
 | `RuntimeError: identity adapter bearer_jwt needs identity.issuer` | `builtin` mode without an explicit `identity.issuer` (set it to `<public_url>/realms/<realm>`) |
 | `no docs adapter ...` note in `/health` | the `type:` names an adapter module that does not exist or lacks its extra |

@@ -14,8 +14,9 @@ rendered file never holds a value. Run `docker compose` with that env file (the 
 Builds: `UnitSpec.build` names the directory holding the Dockerfile (images/gateway); the context is the repository
 root, because the Dockerfiles COPY pyproject.toml / cerebro / plugins from there.
 
-Ports: only the gateway is published (gateway.host:gateway.port, 127.0.0.1 by default). Engines, Postgres, Ollama
-and MCP upstreams are reachable on the compose network only.
+Ports: only the gateway is published (gateway.host:gateway.port, 127.0.0.1 by default; identity.mode none without
+allow_remote is published on 127.0.0.1 whatever gateway.host says, since that mode has no token). Engines, Postgres,
+Ollama and MCP upstreams are reachable on the compose network only.
 
 Health checks: `health_cmd` becomes a CMD check; `health_path` becomes a CMD-SHELL check that tries curl, then wget,
 then python3 (engine images differ in what they ship). An image with none of the three never becomes healthy: set
@@ -46,6 +47,13 @@ DEFAULT_PORT = 8080
 SCHEDULER = "scheduler"
 
 
+def publish_host(cfg) -> str:
+    """The host interface the gateway port is published on: gateway.host, except that identity.mode none without
+    allow_remote is always 127.0.0.1 (the gateway itself applies the same rule to its bind address on a host)."""
+    ident = cfg.identity
+    return "127.0.0.1" if ident.mode == "none" and not ident.allow_remote else cfg.gateway.host
+
+
 def compose_value(value: str) -> str:
     """Escape `$` for compose interpolation, except `${NAME}` secret references which compose must substitute."""
     parts, out, last = _REF.finditer(value), [], 0
@@ -70,7 +78,7 @@ class Adapter(Provisioner):
         self.extra_files: list[str] = [str(f) for f in (self.option("compose_files") or [])]
         self.config_path: str = self.option("config_path") or os.environ.get("CEREBRO_CONFIG", "cerebro.yaml")
         self.plugins_dir: str = cfg.gateway.plugins_dir if cfg else "plugins"
-        self.gateway_bind = (cfg.gateway.host, cfg.gateway.port) if cfg else ("127.0.0.1", 8090)
+        self.gateway_bind = (publish_host(cfg), cfg.gateway.port) if cfg else ("127.0.0.1", 8090)
         self.image_registry: str | None = cfg.provisioning.image_registry if cfg else None
         self.ports: dict[str, int] = {}
         self.profiles: dict[str, list[str]] = {}
