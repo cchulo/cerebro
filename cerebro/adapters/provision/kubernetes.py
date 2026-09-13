@@ -29,8 +29,8 @@ from datetime import datetime, timezone
 from typing import Any
 import yaml
 from ...core.contracts.provision import Endpoint, JobSpec, Provisioner, UnitRef, UnitSpec, UnitStatus
-from ...provision.common import (IDLE_TTL_ANNOTATION, LAST_USED_ANNOTATION, PORT_LABEL, labels_for, parse_ttl,
-                                 resources_for, volume_key)
+from ...provision.common import (IDLE_TTL_ANNOTATION, LAST_USED_ANNOTATION, PORT_LABEL, k8s_labels, labels_for,
+                                 parse_ttl, resources_for, volume_key)
 from ...provision.plan import CONFIG_MOUNT, PLUGINS_MOUNT
 
 log = logging.getLogger("cerebro.provision.kubernetes")
@@ -230,7 +230,7 @@ class Adapter(Provisioner):
         return {**probe, "periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 30}
 
     def unit_objects(self, spec: UnitSpec) -> list[dict]:
-        labels = labels_for(spec, self.project)
+        labels = k8s_labels(labels_for(spec, self.project))
         pod_labels = {"app": spec.name, **{k: v for k, v in labels.items() if k != PORT_LABEL}}
         pod, extra = self._pod_spec(spec, pod_labels)
         objs = [*self._pvcs(spec, pod_labels), *extra]
@@ -253,7 +253,7 @@ class Adapter(Provisioner):
         return objs
 
     def job_objects(self, spec: JobSpec) -> list[dict]:
-        labels = labels_for(spec, self.project)
+        labels = k8s_labels(labels_for(spec, self.project))
         pod_labels = {"app": spec.name, **labels}
         pod, extra = self._pod_spec(spec, pod_labels)
         pod["restartPolicy"] = "Never"

@@ -146,6 +146,27 @@ def test_files_and_config_mounts(rendered):
     assert objects[("Namespace", "cerebro")]["metadata"]["labels"] == {"cerebro.io/project": "cerebro"}
 
 
+def test_every_label_value_is_kubernetes_valid(rendered):
+    import re
+    valid = re.compile(r"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+    seen = 0
+    for (kind, name), obj in objects_with_templates(rendered[2]):
+        for k, v in (obj.get("metadata", {}).get("labels") or {}).items():
+            assert valid.match(str(v)), f"{kind}/{name}: {k}={v!r}"
+            seen += 1
+    assert seen > 40
+    assert rendered[2][("Deployment", "docs-public")]["metadata"]["labels"]["cerebro.io/adapter"] == "docs.fakerag"
+    assert k8s.k8s_labels({"a": "docs:x/y", "b": "ok"}) == {"a": "docs-x-y", "b": "ok"}
+
+
+def objects_with_templates(objects):
+    for key, obj in objects.items():
+        yield key, obj
+        tpl = obj.get("spec", {}).get("template") or obj.get("spec", {}).get("jobTemplate", {}).get("spec", {}).get("template")
+        if tpl:
+            yield key, tpl
+
+
 def test_bad_idle_ttl_fails_at_render(rendered):
     adapter, _, _ = rendered
     with pytest.raises(ValueError, match="idle_ttl"):

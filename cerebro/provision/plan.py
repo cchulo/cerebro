@@ -29,6 +29,7 @@ from ..core.config import Config
 from ..core.context import AdapterContext
 from ..core.contracts.provision import JobSpec, PortSpec, UnitSpec, VolumeSpec
 from ..core.contracts.sources import discover
+from .common import label_value
 
 log = logging.getLogger("cerebro.provision")
 
@@ -161,8 +162,7 @@ def mcp_units(config: Config, plugins_dir: str | pathlib.Path | None = None) -> 
             continue
         m = plugin.mcp
         out.append(UnitSpec(name=f"mcp-{name}", role="mcp", image=m.image, args=list(m.args), env=dict(m.env),
-                            ports=[PortSpec(port=m.port)], health_path=None,
-                            labels={"cerebro.io/plugin": name, "cerebro.io/mcp-path": m.path}))
+                            ports=[PortSpec(port=m.port)], health_path=None, labels={"cerebro.io/plugin": name}))
     return out
 
 
@@ -176,7 +176,7 @@ def plan(config: Config, ctx: AdapterContext | None = None, *, plugins_dir: str 
     jobs: list[JobSpec] = []
     for a in adapters:
         for u in a.units():
-            u.labels.setdefault("cerebro.io/adapter", f"{a.kind}:{a.name}")
+            u.labels.setdefault("cerebro.io/adapter", label_value(f"{a.kind}.{a.name}"))
             engine_units.append(u)
         jobs.extend(a.jobs())
     engine_units.extend(mcp_units(config, plugins_dir))

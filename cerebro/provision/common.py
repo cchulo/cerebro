@@ -30,6 +30,20 @@ def labels_for(spec: UnitSpec | JobSpec, project: str) -> dict[str, str]:
     return out
 
 
+_LABEL_VALUE = re.compile(r"^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+
+
+def label_value(value: str) -> str:
+    """A Kubernetes-valid label value: alphanumerics, '-', '_', '.', alphanumeric at both ends, at most 63 chars."""
+    v = re.sub(r"[^A-Za-z0-9_.-]", "-", str(value))[:63].strip("-_.")
+    assert _LABEL_VALUE.match(v), v
+    return v
+
+
+def k8s_labels(labels: dict[str, str]) -> dict[str, str]:
+    return {k: label_value(v) for k, v in labels.items()}
+
+
 def parse_ttl(value: str | int | None) -> int | None:
     """'2h' | '30m' | '1d' | '90s' | 90 -> seconds; None/'' -> None."""
     if value is None or value == "":

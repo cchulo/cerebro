@@ -73,7 +73,7 @@ def test_mcp_units_from_plugins(example_config, tmp_path):
     mcp = next(u for u in units if u.name == "mcp-fakemcp")
     assert mcp.role == "mcp" and mcp.image == "ghcr.io/example/mcp:1.0" and mcp.http_port == 9000 and mcp.args == ["--stateless"]
     assert mcp.env == {"FAKE_URL": "http://fake.internal", "FAKE_TOKEN": "${FAKE_TOKEN}"}
-    assert mcp.secret_env == ["FAKE_TOKEN"] and mcp.labels["cerebro.io/mcp-path"] == "/mcp"
+    assert mcp.secret_env == ["FAKE_TOKEN"] and mcp.labels["cerebro.io/plugin"] == "fakemcp"
     for live in ({"enabled": False}, {"via": "rest"}, {"url": "http://elsewhere:9000/mcp"}):
         example_config.sources["fakemcp"] = {"live": live}
         units, _ = plan(example_config, ctx, adapters=[], plugins_dir=pdir)
@@ -104,7 +104,7 @@ def test_every_spec_carries_the_project_label(planned, example_config):
     units, jobs = planned
     for s in [*units, *jobs]:
         assert s.labels["cerebro.io/project"] == example_config.provisioning.project
-    assert next(u for u in units if u.name == "docs-public").labels["cerebro.io/adapter"] == "docs:fakerag"
+    assert next(u for u in units if u.name == "docs-public").labels["cerebro.io/adapter"] == "docs.fakerag"
 
 
 def test_volume_sharing_convention():
