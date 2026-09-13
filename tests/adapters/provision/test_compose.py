@@ -171,6 +171,20 @@ def test_extra_compose_files_reach_every_command(rendered):
     assert "-f deploy/generated/compose.yaml -f tests/e2e/compose.mocks.yaml --env-file" in crontab
 
 
+def test_can_ensure_needs_the_docker_cli_and_a_daemon(rendered, monkeypatch):
+    adapter, _, _ = rendered
+    monkeypatch.setattr(compose.shutil, "which", lambda name: None)
+    assert not adapter.can_ensure(), "inside the gateway container: no CLI, no socket"
+    monkeypatch.setattr(compose.shutil, "which", lambda name: "/usr/bin/docker")
+    monkeypatch.setattr(compose.os.path, "exists", lambda p: p == "/var/run/docker.sock")
+    assert adapter.can_ensure()
+    monkeypatch.setattr(compose.os.path, "exists", lambda p: False)
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    assert not adapter.can_ensure()
+    monkeypatch.setenv("DOCKER_HOST", "tcp://docker:2375")
+    assert adapter.can_ensure()
+
+
 def test_parse_ps_accepts_both_formats():
     assert compose.parse_ps("") == []
     assert compose.parse_ps('{"Service": "a", "State": "running"}\n{"Service": "b", "State": "exited"}\n')[1]["State"] == "exited"

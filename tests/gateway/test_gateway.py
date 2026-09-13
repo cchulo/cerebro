@@ -6,6 +6,7 @@ import httpx, pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from cerebro.core import TokenScope, registry
+from cerebro.core.contracts import Endpoint, Provisioner, UnitSpec, UnitStatus
 from cerebro.gateway.identity import build_identity
 from cerebro.gateway.live import LiveRegistry
 from cerebro.gateway.server import Gateway, keywords
@@ -19,13 +20,15 @@ TOKENS = {"tok-alice": {"subject": "alice"},
 STATIC = {"mode": "static", "tokens": TOKENS}
 
 
-def make_gateway(make_config, make_ctx, *, identity=None, docs=None, code=None, memory=None, plugins=None, **overrides) -> Gateway:
+def make_gateway(make_config, make_ctx, *, identity=None, docs=None, code=None, memory=None, plugins=None,
+                 provisioner=None, unit_specs=None, **overrides) -> Gateway:
     cfg = make_config(identity=identity or STATIC, **overrides)
     ctx = make_ctx(cfg, CEREBRO_TOKEN="remote-secret")
     docs = docs if docs is not None else FakeDocs(answers={"public": ("deploy with make deploy", True)})
     return Gateway(cfg, identity=build_identity(cfg, ctx), policy=registry.build("policy", "groups", {}, ctx),
                    docs=docs, code=code if code is not None else FakeCode(), memory=memory if memory is not None else FakeMemory(),
-                   live=LiveRegistry(cfg, plugins=fake_plugins() if plugins is None else plugins))
+                   live=LiveRegistry(cfg, plugins=fake_plugins() if plugins is None else plugins),
+                   provisioner=provisioner, unit_specs=unit_specs)
 
 
 @pytest.fixture
@@ -44,7 +47,8 @@ async def session(gw: Gateway, token: str | None, client_host: str = "127.0.0.1"
     """An initialised MCP ClientSession against the in-process app. Each session serves a fresh Gateway over the
     same adapters (a StreamableHTTPSessionManager runs once per instance; uvicorn's lifespan does that in
     production), so state in the fakes carries across sessions while the manager does not."""
-    served = Gateway(gw.config, identity=gw.identity, policy=gw.policy, docs=gw.docs, code=gw.code, memory=gw.memory, live=gw.live)
+    served = Gateway(gw.config, identity=gw.identity, policy=gw.policy, docs=gw.docs, code=gw.code, memory=gw.memory, live=gw.live,
+                     provisioner=gw.provisioner, unit_specs=gw.unit_specs)
     async with served.mcp.session_manager.run():
         async with http(served, client_host, token) as client:
             async with streamable_http_client(URL, http_client=client) as (r, w, _):
@@ -276,6 +280,133 @@ async def test_code_units_and_code_tool_are_limited_to_the_callers_scopes(gatewa
         err, text = await call(s, "code_tool", unit="code-public", tool="delete_everything")
         assert err and "not allowed" in text
         assert ("code-infra", "stats", {}) not in gateway.code.calls
+
+
+# ------------------------------------------------------------------------------------------------- scale to zero
+class FakeProvisioner(Provisioner):
+    """Records touch() and ensure(); `ready` is what ensure() answers, `able` what can_ensure() answers."""
+    name = "fake-provisioner"
+
+    def __init__(self, *, ready=True, able=True, fail=False):
+        super().__init__({}, None)
+        self.ready, self.able, self.fail = ready, able, fail
+        self.touched: list[str] = []
+        self.ensured: list[str] = []
+
+    def endpoint(self, unit):
+        return f"http://{unit}:8080"
+
+    async def ensure(self, spec):
+        self.ensured.append(spec.name)
+        if self.fail:
+            raise RuntimeError("no such deployment")
+        return Endpoint(url=self.endpoint(spec.name), ready=self.ready)
+
+    async def release(self, ref): ...
+    async def status(self, ref): return UnitStatus(name=ref.name)
+    async def run_job(self, job, *, wait=False): return job.name
+    def render(self, units, jobs): return {}
+    def can_ensure(self): return self.able
+    def touch(self, ref): self.touched.append(ref.name)
+
+
+class SleepyCode(FakeCode):
+    """Refuses every call until woken: the first `down` calls raise what the MCP client raises for a unit that is
+    not listening (an ExceptionGroup around httpx.ConnectError)."""
+    def __init__(self, down: int = 1, error=None):
+        super().__init__()
+        self.down, self.error, self.attempts = down, error, 0
+
+    async def search(self, unit, query, **kw):
+        self.attempts += 1
+        if self.attempts <= self.down:
+            raise self.error or ExceptionGroup("unhandled errors in a TaskGroup", [httpx.ConnectError("All connection attempts failed")])
+        return await super().search(unit, query, **kw)
+
+
+def specs(*names):
+    return {n: UnitSpec(name=n, role="code", image="x") for n in names}
+
+
+def sleepy_gateway(make_config, make_ctx, code, prov, unit_specs=None):
+    return make_gateway(make_config, make_ctx, code=code, provisioner=prov,
+                        unit_specs=specs("code-public", "docs-public") if unit_specs is None else unit_specs)
+
+
+async def test_units_are_touched_on_every_docs_and_code_call(make_config, make_ctx):
+    prov = FakeProvisioner()
+    gw = sleepy_gateway(make_config, make_ctx, FakeCode(), prov)
+    async with session(gw, "tok-alice") as s:
+        await call(s, "search_code", query="x")
+        await call(s, "query_docs", query="x", fallback=False)
+        await call(s, "list_code_units")
+        await call(s, "code_tool", unit="code-public", tool="stats")
+    assert prov.touched == ["code-public", "docs-public", "code-public", "code-public"] and prov.ensured == []
+
+
+async def test_a_refused_unit_is_ensured_once_and_the_call_retried(make_config, make_ctx, caplog):
+    import logging
+    prov, code = FakeProvisioner(), SleepyCode(down=1)
+    gw = sleepy_gateway(make_config, make_ctx, code, prov)
+    with caplog.at_level(logging.INFO, logger="cerebro.gateway"):
+        async with session(gw, "tok-alice") as s:
+            err, out = await call(s, "search_code", query="def main")
+    assert not err and len(out["hits"]) == 2 and "errors" not in out
+    assert prov.ensured == ["code-public"] and code.attempts == 2
+    assert "asking the fake-provisioner provisioner to ensure() it" in caplog.text
+
+
+async def test_a_unit_the_plan_does_not_know_is_neither_touched_nor_woken(make_config, make_ctx):
+    prov, code = FakeProvisioner(), SleepyCode(down=1)
+    gw = sleepy_gateway(make_config, make_ctx, code, prov, unit_specs={})
+    async with session(gw, "tok-alice") as s:
+        err, out = await call(s, "search_code", query="x")
+    assert not err and out["hits"] == [] and "ConnectError" in out["errors"]["code-public"]["*"]
+    assert prov.touched == [] and prov.ensured == []
+
+
+async def test_compose_inside_the_container_cannot_wake_a_unit_and_says_so(make_config, make_ctx, caplog):
+    prov, code = FakeProvisioner(able=False), SleepyCode(down=5)
+    gw = sleepy_gateway(make_config, make_ctx, code, prov)
+    async with session(gw, "tok-alice") as s:
+        err, out = await call(s, "search_code", query="x")
+    assert not err and out["errors"] == {"code-public": {"*": "ConnectError: All connection attempts failed"}}, "the group is unwrapped"
+    assert prov.ensured == [] and code.attempts == 1
+    assert "cannot start it from this process; run `cerebro provision up code-public`" in caplog.text
+
+
+@pytest.mark.parametrize("prov", [FakeProvisioner(ready=False), FakeProvisioner(fail=True)])
+async def test_a_failed_or_slow_ensure_returns_the_original_error(make_config, make_ctx, prov):
+    code = SleepyCode(down=5)
+    gw = sleepy_gateway(make_config, make_ctx, code, prov)
+    async with session(gw, "tok-alice") as s:
+        err, out = await call(s, "search_code", query="x")
+    assert not err and out["errors"]["code-public"]["*"].startswith("ConnectError") and code.attempts == 1
+    assert prov.ensured == ["code-public"]
+
+
+async def test_other_errors_never_trigger_a_wake_up(make_config, make_ctx):
+    prov = FakeProvisioner()
+    code = SleepyCode(down=5, error=httpx.ReadTimeout("slow"))
+    gw = sleepy_gateway(make_config, make_ctx, code, prov)
+    async with session(gw, "tok-alice") as s:
+        err, out = await call(s, "search_code", query="x")
+    assert not err and out["errors"]["code-public"]["*"] == "ReadTimeout: slow" and prov.ensured == []
+
+
+def test_is_connection_error():
+    from cerebro.gateway.server import is_connection_error
+    assert is_connection_error(httpx.ConnectError("x")) and is_connection_error(ConnectionRefusedError())
+    assert is_connection_error(ExceptionGroup("g", [ValueError(), ExceptionGroup("h", [httpx.ConnectError("x")])]))
+    assert not is_connection_error(httpx.ReadTimeout("x")) and not is_connection_error(ExceptionGroup("g", [ValueError()]))
+
+
+def test_from_config_wires_the_provisioner_and_the_plans_units(make_config):
+    cfg = make_config(identity=STATIC)
+    gw = Gateway.from_config(cfg)
+    if gw.provisioner is not None:
+        assert gw.provisioner.name == cfg.provisioning.target
+        assert {"docs-public", "code-public"} <= set(gw.unit_specs) or gw.code is None or gw.docs is None
 
 
 # ------------------------------------------------------------------------------------------------- memory

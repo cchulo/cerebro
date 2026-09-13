@@ -144,9 +144,14 @@ cerebro provision operator                         # the idle-TTL operator (kopf
   (`CEREBRO_TRUSTED_NETWORK=1`, set by the render), so reach it with
   `kubectl -n cerebro port-forward svc/gateway 8090:8090` and nothing else.
 - Idle TTL: docs and code Deployments carry `cerebro.io/idle-ttl` (from `engines.<kind>.idle_ttl`); the operator
-  compares `cerebro.io/last-used` (stamped by `ensure()` and `touch()`, or the creation time) with it every 60 s and
-  patches `replicas: 0`. Waking up is `cerebro provision up <unit>` (or `kubectl scale`): the gateway does not call
-  `ensure()` on a request today, so an idled unit stays at zero until you scale it.
+  compares `cerebro.io/last-used` (stamped by `ensure()` and by the gateway's `touch()` on every docs / code call,
+  throttled to one patch a minute) with it every 60 s and patches `replicas: 0`. Waking up: when a call to the unit
+  is refused, the gateway calls `ensure()` once (scale to 1, wait up to `provisioning.options.ready_timeout`) and
+  retries. That needs API credentials in the gateway pod, which the render does not give it
+  (`automountServiceAccountToken: false`): bind a ServiceAccount with `get`/`patch` on `deployments` to the
+  `gateway` Deployment yourself, or wake units by hand with `cerebro provision up <unit>` (or `kubectl scale`);
+  without credentials the gateway logs that and returns the connection error. On compose the gateway container has
+  no Docker socket, so the same log line tells you to run `cerebro provision up <unit>`.
 - A scope removed from `cerebro.yaml` leaves its objects behind (render only writes current units):
   `kubectl -n cerebro delete deploy,svc,cronjob,pvc -l cerebro.io/scope=<name>`. `provision down` deletes everything
   with the `cerebro.io/project` label; `--volumes` also the claims and the namespace.

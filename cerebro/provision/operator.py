@@ -4,8 +4,11 @@
 
 Watches Deployments labelled `cerebro.io/role` in {docs, code} that carry the `cerebro.io/idle-ttl` annotation
 (rendered from UnitSpec.idle_ttl). Every INTERVAL seconds it compares `cerebro.io/last-used` (set by the
-provisioner's ensure() and touch(); the Deployment's creation time when absent) with the TTL and patches
-`spec.replicas: 0` when the unit is idle. `Provisioner.ensure()` scales it back to 1 on the next use.
+provisioner's ensure() and touch(); the gateway touches a unit on every docs/code call, throttled; the Deployment's
+creation time when absent) with the TTL and patches `spec.replicas: 0` when the unit is idle. Waking up: when a
+call to the unit is refused, the gateway calls `Provisioner.ensure()` once (scale to 1, wait for readiness) and
+retries (cerebro.gateway.server.Gateway.unit_call); that needs the gateway pod to hold a service-account token with
+get/patch on deployments, otherwise the request fails with a log line and `cerebro provision up <unit>` wakes it.
 
 The decision itself is `should_scale_to_zero()`, a pure function, so it is unit-tested without a cluster.
 """

@@ -35,7 +35,7 @@ operator adds an override: extra services (mocks, a proxy), bind mounts into the
 paths inside those files resolve against the rendered file's directory, as compose does for any override.
 """
 from __future__ import annotations
-import asyncio, json, logging, os, pathlib, re, shlex, time
+import asyncio, json, logging, os, pathlib, re, shlex, shutil, time
 from datetime import datetime, timezone
 import yaml
 from ...core.contracts.provision import Endpoint, JobSpec, Provisioner, UnitRef, UnitSpec, UnitStatus
@@ -238,6 +238,11 @@ class Adapter(Provisioner):
         if check and proc.returncode:
             raise RuntimeError(f"{' '.join(cmd)} failed ({proc.returncode}): {(err or b'').decode().strip()}")
         return (out or b"").decode()
+
+    def can_ensure(self) -> bool:
+        """`docker compose up` needs the docker CLI and a daemon: true on the operator's machine, false inside the
+        gateway container (no CLI, no socket, no rendered file), where an idled unit is a log line and an error."""
+        return bool(shutil.which("docker")) and (os.path.exists("/var/run/docker.sock") or bool(os.environ.get("DOCKER_HOST")))
 
     async def ensure(self, spec: UnitSpec) -> Endpoint:
         self.ports[spec.name] = spec.http_port

@@ -15,7 +15,9 @@ Tools (TokenScope each needs):
 
 Adapters are built once at startup (Gateway.from_config) through cerebro.core.registry; tests pass fakes to
 Gateway(...) directly. Units are addressed through the AdapterContext's Locator: the provisioner adapter when
-cerebro.adapters.provision.<target> exists, else a StaticLocator("http://{unit}:8080").
+cerebro.adapters.provision.<target> exists, else a StaticLocator("http://{unit}:8080"). Every docs / code call goes
+through Gateway.unit_call: the provisioner is told the unit was used (idle handling) and, when the unit refuses the
+connection because it was scaled to zero, asked to ensure() it once before the call is retried.
 """
 import asyncio
 import functools
@@ -32,9 +34,11 @@ from mcp.types import ToolAnnotations
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from cerebro.core import AdapterContext, Config, EnvSecrets, Grants, Principal, StaticLocator, TokenScope, code_units, registry
+import httpx
+
+from cerebro.core import AdapterContext, Config, EnvSecrets, Grants, Principal, StaticLocator, TokenScope, code_units, docs_unit_name, registry
 from cerebro.core.contracts import (AccessPolicy, CodeIntelligence, DocumentIndex, IdentityProvider, MemoryStore,
-                                    QueryOptions, RequestInfo, SearchHit)
+                                    Provisioner, QueryOptions, RequestInfo, SearchHit, UnitRef, UnitSpec)
 from cerebro.core.types import Forbidden, Unauthenticated, Unsupported
 from cerebro.core.units import units_for_repos
 from cerebro.adapters.identity._bearer import WELL_KNOWN
@@ -91,7 +95,17 @@ def request_info(request: Request) -> RequestInfo:
 
 
 def _error(e: BaseException) -> str:
+    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:   # the MCP client wraps one error in a group
+        e = e.exceptions[0]
     return f"{type(e).__name__}: {e}".rstrip(": ")           # httpx.ReadTimeout stringifies to "" - keep the type
+
+
+def is_connection_error(e: BaseException) -> bool:
+    """A unit that is not listening (scaled to zero, not started): refused / unreachable, as httpx or the MCP client
+    (which wraps it in an ExceptionGroup) report it. Timeouts of a listening unit are not that."""
+    if isinstance(e, BaseExceptionGroup):
+        return any(is_connection_error(x) for x in e.exceptions)
+    return isinstance(e, (httpx.ConnectError, ConnectionError))
 
 
 # ----------------------------------------------------------------------------------------------- identity middleware
@@ -138,12 +152,17 @@ class CerebroMCP(FastMCP):
 class Gateway:
     def __init__(self, config: Config, *, identity: IdentityProvider, policy: AccessPolicy,
                  docs: DocumentIndex | None = None, code: CodeIntelligence | None = None,
-                 memory: MemoryStore | None = None, live: LiveRegistry | None = None, notes: list[str] | None = None):
+                 memory: MemoryStore | None = None, live: LiveRegistry | None = None, notes: list[str] | None = None,
+                 provisioner: Provisioner | None = None, unit_specs: dict[str, UnitSpec] | None = None):
         self.config = config
         self.identity, self.policy = identity, policy
         self.docs, self.code, self.memory = docs, code, memory
         self.live = live or LiveRegistry(config)
         self.notes = list(notes or [])
+        self.provisioner = provisioner
+        # the docs / code units the plan knows, by name: what touch() and the scale-to-zero wake-up act on
+        self.unit_specs: dict[str, UnitSpec] = unit_specs if unit_specs is not None else \
+            {u.name: u for a in (docs, code) if a is not None for u in a.units()}
         self.mcp_path = config.gateway.path.rstrip("/") or "/"
         self.tool_scopes: dict[str, TokenScope | None] = {}
         self.mcp = CerebroMCP(self, name="cerebro", instructions=INSTRUCTIONS, host=self.host, port=config.gateway.port,
@@ -182,7 +201,8 @@ class Gateway:
                 return None
 
         gw = cls(config, identity=identity, policy=policy, docs=engine("docs", config.engines.docs),
-                 code=engine("code", config.engines.code), memory=engine("memory", config.engines.memory), notes=notes)
+                 code=engine("code", config.engines.code), memory=engine("memory", config.engines.memory), notes=notes,
+                 provisioner=locator if isinstance(locator, Provisioner) else None)
         return gw
 
     @property
@@ -313,6 +333,36 @@ class Gateway:
                 return await c
         return await asyncio.gather(*(one(c) for c in coros), return_exceptions=True)
 
+    async def unit_call(self, unit: str, fn):
+        """One call against a unit, `fn` being a zero-argument coroutine factory: record the use for idle handling
+        (provisioner.touch), and when the unit refuses the connection (scaled to zero) ask the provisioner to
+        ensure() it once and retry. Only units the plan knows are touched or woken; when the provisioner cannot act
+        from here (compose inside the container has no Docker socket) the original error is returned after one
+        clear log line."""
+        spec = self.unit_specs.get(unit)
+        if self.provisioner is not None and spec is not None:
+            self.provisioner.touch(UnitRef(name=unit))
+        try:
+            return await fn()
+        except BaseException as e:
+            if spec is None or self.provisioner is None or not is_connection_error(e):
+                raise
+            if not self.provisioner.can_ensure():
+                log.warning("unit %s refused the connection (%s) and the %s provisioner cannot start it from this "
+                            "process; run `cerebro provision up %s`", unit, _error(e), self.provisioner.name, unit)
+                raise
+            log.info("unit %s refused the connection (%s): asking the %s provisioner to ensure() it", unit, _error(e), self.provisioner.name)
+            try:
+                ep = await self.provisioner.ensure(spec)
+            except Exception as ee:                     # noqa: BLE001 - the caller gets the original error
+                log.warning("ensure(%s) failed: %s; returning the original error", unit, _error(ee))
+                raise e from None
+            if not ep.ready:
+                log.warning("ensure(%s) did not reach readiness in time; returning the original error", unit)
+                raise e from None
+            log.info("unit %s is up again at %s: retrying", unit, ep.url)
+            return await fn()
+
     # ---- live fallback
     async def fallback_search(self, grants: Grants, query: str, scopes: list[str]) -> dict:
         """Live sources with fallback enabled, searched for the scopes whose index missed."""
@@ -370,7 +420,7 @@ def register_tools(gw: Gateway) -> None:
         m = docs.check_mode(mode)
 
         async def one(scope: str) -> dict:
-            a = await docs.query(scope, query, QueryOptions(mode=m))
+            a = await gw.unit_call(docs_unit_name(scope), lambda: docs.query(scope, query, QueryOptions(mode=m)))
             return {"scope": scope, "answer": a.answer, "answered": a.answered,
                     "references": [r.model_dump(exclude_none=True) for r in a.references]}
 
@@ -419,9 +469,10 @@ def register_tools(gw: Gateway) -> None:
         groups = units_for_repos(config, repos)
         if not groups:
             return {"query": query, "hits": [], "units": [], "note": "no repositories in your scopes"}
-        results = await gw.bounded([
-            code.search(unit, query, repos=[r.name for r in mine], branch=branch, regex=regex, max_results=max_results)
-            for unit, mine in groups])
+        def one(unit, mine):
+            return gw.unit_call(unit.name, lambda: code.search(unit, query, repos=[r.name for r in mine], branch=branch,
+                                                              regex=regex, max_results=max_results))
+        results = await gw.bounded([one(unit, mine) for unit, mine in groups])
         hits: list[dict] = []
         errors: dict[str, dict[str, str]] = {}              # errors[unit][repo]; "*" is the unit as a whole
         for (unit, _), res in zip(groups, results):
@@ -449,7 +500,7 @@ def register_tools(gw: Gateway) -> None:
         g = gw.grants_of(ctx)
         code = gw.need_code()
         units = code_units(config, g.scopes)
-        caps = await gw.bounded([code.capabilities(u) for u in units])
+        caps = await gw.bounded([gw.unit_call(u.name, lambda u=u: code.capabilities(u)) for u in units])
         out = []
         for u, c in zip(units, caps):
             entry = {"name": u.name, "scope": u.scope, "kind": u.kind,
@@ -468,7 +519,7 @@ def register_tools(gw: Gateway) -> None:
         units = {u.name: u for u in code_units(config, g.scopes)}
         if unit not in units:
             raise Forbidden(f"{g.subject} is not allowed to access code unit '{unit}'; allowed: {sorted(units)}")
-        res = await code.call(units[unit], tool, arguments or {}, branch=branch)
+        res = await gw.unit_call(unit, lambda: code.call(units[unit], tool, arguments or {}, branch=branch))
         return res.model_dump(exclude_none=True)
 
     # ---- memory

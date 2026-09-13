@@ -101,7 +101,14 @@ class Provisioner(Adapter, Locator):
 
     @abstractmethod
     async def ensure(self, spec: UnitSpec) -> Endpoint:
-        """Idempotent: create the workload if missing, scale it up if idled, return its endpoint."""
+        """Idempotent: create the workload if missing, scale it up if idled, return its endpoint. The gateway calls
+        it when a unit refuses the connection (scaled to zero); `cerebro provision up <unit>` calls it by hand."""
+
+    def can_ensure(self) -> bool:
+        """Whether ensure() can work from THIS process: the gateway container has no Docker socket, a pod needs a
+        service-account token. False means the gateway logs how to start the unit and returns the original error
+        instead of trying."""
+        return True
 
     @abstractmethod
     async def release(self, ref: UnitRef) -> None: ...

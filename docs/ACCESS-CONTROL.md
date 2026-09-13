@@ -41,8 +41,9 @@ Rules enforced by the loader, the ingest engine and the gateway:
 | memory (Hindsight) | one shared unit | partitioned by bank name, which only the policy chooses |
 
 Branches: `branches:` on a repository lists what the index job tracks (globs resolved against origin at index time,
-the default branch always). `search_code` and `code_tool` take `branch`; a branch that is not tracked is a tool error,
-and an engine without branch support rejects the argument as unsupported.
+the default branch always). `search_code` and `code_tool` take `branch`; a branch that is not tracked is a
+per-repository diagnostic under `errors` for `search_code` and a tool error for `code_tool`, and an engine without
+branch support rejects the argument as unsupported.
 
 `unit: repo` costs one workload per repository and gives you finer idle TTLs and volumes; `unit: scope` costs one
 per scope and lets one call address several repositories at once. Either way a caller only ever reaches units whose

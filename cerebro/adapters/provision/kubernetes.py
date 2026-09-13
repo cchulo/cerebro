@@ -336,6 +336,14 @@ class Adapter(Provisioner):
                 return False
             time.sleep(3)
 
+    def can_ensure(self) -> bool:
+        """API credentials exist: an in-cluster service-account token (the gateway pod needs one, with get/patch on
+        deployments, to wake idled units) or a kubeconfig on the operator's machine."""
+        if os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token"):
+            return True
+        kubeconfig = os.environ.get("KUBECONFIG") or os.path.expanduser("~/.kube/config")
+        return any(os.path.exists(p) for p in kubeconfig.split(os.pathsep) if p)
+
     async def ensure(self, spec: UnitSpec) -> Endpoint:
         self.ports[spec.name] = spec.http_port
         ready = await asyncio.to_thread(self._ensure_sync, spec)

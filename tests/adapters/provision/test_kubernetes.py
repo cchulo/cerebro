@@ -225,6 +225,19 @@ def test_kubectl_dry_run_accepts_the_kustomization(rendered):
         assert line in res.stdout, line
 
 
+def test_can_ensure_needs_credentials(ctx, tmp_path, monkeypatch):
+    adapter = k8s.Adapter({"output_dir": str(tmp_path)}, ctx)
+    monkeypatch.setenv("KUBECONFIG", str(tmp_path / "missing"))
+    monkeypatch.setattr(k8s.os.path, "exists", lambda p: False)
+    assert not adapter.can_ensure(), "a pod without a service-account token (the default render) cannot scale anything"
+    monkeypatch.setattr(k8s.os.path, "exists", lambda p: p == "/var/run/secrets/kubernetes.io/serviceaccount/token")
+    assert adapter.can_ensure()
+    (tmp_path / "kube").write_text("apiVersion: v1\n")
+    monkeypatch.setattr(k8s.os.path, "exists", lambda p: p == str(tmp_path / "kube"))
+    monkeypatch.setenv("KUBECONFIG", str(tmp_path / "kube"))
+    assert adapter.can_ensure()
+
+
 def test_endpoint_inside_the_cluster_comes_from_the_environment(ctx, tmp_path, monkeypatch):
     from cerebro.adapters.provision import kubernetes
     monkeypatch.setenv("CEREBRO_UNIT_PORTS", "docs-public=9621,memory=8888")
