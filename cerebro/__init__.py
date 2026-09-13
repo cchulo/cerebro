@@ -7,4 +7,4 @@ Packages:
   cerebro.adapters    one subpackage per contract kind; each adapter talks to its engine
   cerebro.sdk         the public SDK source plugins (plugins/*.py) import from
 """
-__version__ = "2.0.0a0"
+__version__ = "0.2.0"
