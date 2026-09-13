@@ -1,0 +1,30 @@
+# Marker probes for `cerebro smoke --probes tests/e2e/probes.yaml`: questions whose answer must carry a marker for
+# some personas and never for the others. Markers and page ids come from tests/fixtures/sources/confluence.yaml;
+# personas are the subjects of identity.tokens in cerebro.e2e.yaml (alice: payments, bob: infra, carol: both, dave: public).
+docs:
+  - name: settlement cutoff (PAY space, scope payments)
+    query: "When does the daily settlement batch for card payments close? Quote the settlement code."
+    marker: ZEPHYR-7731
+    scope: payments
+    visible_to: [alice, carol]
+    hidden_from: [bob, dave]
+  - name: restricted fraud page (page-level restriction, never indexed)
+    query: "What score threshold holds transactions for manual review? Quote the threshold code."
+    marker: RESTRICTED-QX-9911
+    hidden_from: [alice, bob, carol, dave]
+  - name: cluster failover (OPS space, scope infra)
+    query: "How is a failover of the pg-main Postgres cluster done? Quote the failover code."
+    marker: KESTREL-5520
+    scope: infra
+    visible_to: [bob, carol]
+    hidden_from: [alice, dave]
+live:                                  # --live: the system of record through the gateway, same scopes
+  source: confluence
+  search:
+    - { query: settlement, ref: "3001", space: PAY, visible_to: [alice, carol], hidden_from: [bob, dave] }
+    - { query: "manual review threshold", ref: "3002", hidden_from: [alice, bob, carol, dave] }   # restricted page
+  fetch:
+    - { ref: "3001", marker: ZEPHYR-7731, visible_to: [alice, carol], hidden_from: [bob, dave] }
+    - { ref: "3002", marker: RESTRICTED-QX-9911, hidden_from: [alice, bob, carol, dave] }
+  fallback:                            # a miss in the index consults the live source for the same scopes
+    - { query: "settlement code ZEPHYR", persona: alice, scope: payments }

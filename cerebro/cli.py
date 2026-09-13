@@ -2,7 +2,7 @@
 
     cerebro validate [-c cerebro.yaml]      check the config, print the resolved units
     cerebro schema                          JSON schema of cerebro.yaml (editor completion)
-    cerebro <component> ...                 gateway | ingest | provision | index | bridge (each component registers its own)
+    cerebro <component> ...                 gateway | ingest | provision | index | bridge | smoke (each registers its own)
 """
 from __future__ import annotations
 import argparse, importlib, json, sys
@@ -13,6 +13,7 @@ COMPONENTS = {
     "provision": "cerebro.provision_cli",
     "index": "cerebro.adapters.code.index_cli",
     "bridge": "cerebro.bridge.cli",
+    "smoke": "cerebro.smoke",
 }
 
 
