@@ -45,6 +45,8 @@ class UnitSpec(BaseModel):
     volumes: list[VolumeSpec] = Field(default_factory=list)
     resources: dict[str, str] = Field(default_factory=dict)
     health_path: str | None = "/health"
+    health_cmd: list[str] | None = Field(default=None, description="exec health check (pg_isready ...); wins over health_path")
+    files: dict[str, str] = Field(default_factory=dict, description="mount path -> small file content (init scripts); never secrets")
     scope: str | None = None
     idle_ttl: str | None = None
     depends_on: list[str] = Field(default_factory=list)
@@ -67,6 +69,7 @@ class JobSpec(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
     secret_env: list[str] = Field(default_factory=list)
     volumes: list[VolumeSpec] = Field(default_factory=list)
+    files: dict[str, str] = Field(default_factory=dict, description="mount path -> small file content; never secrets")
     schedule: str | None = Field(default=None, description="cron; None = on demand only")
     scope: str | None = None
     depends_on: list[str] = Field(default_factory=list)
