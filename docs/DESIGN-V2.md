@@ -259,10 +259,14 @@ it. That is why the builtin server choice matters more than any gateway code her
 
 Do not write one. An authorization server is where security bugs concentrate, and maintained ones with permissive
 licences exist. Criteria: OAuth 2.1 and OIDC, RFC 8414, RFC 8707, CIMD or at least DCR, passkeys, Postgres storage,
-a footprint a laptop tolerates. Candidates to verify against that list: Keycloak (Apache-2.0, heaviest, most complete),
-Authentik, Ory Hydra with Kratos for login. The adapter is `AuthorizationServer` with a unit template, so the
-provisioner runs it like any engine, plus `seed(users, groups)`. Picking the first implementation is an open decision
-in section 11.
+a footprint a laptop tolerates. **Decision (2026-09-13): Keycloak** (Apache-2.0) is the first `builtin` implementation: the most complete of the
+candidates (DCR, passkeys, OIDC, fine-grained admin all known to work) and the one most organisations already know;
+its footprint (about 1 GB RAM) costs teams, not home users, who run `mode: none`. Authentik and Ory Hydra with Kratos
+remain possible second adapters. Two things to verify during the identity slice: RFC 8707 resource indicators on the
+pinned Keycloak version, and CIMD; if Keycloak lacks CIMD, the gateway serves a small CIMD-to-DCR shim so spec-following
+MCP clients still register without manual steps. The adapter is `AuthorizationServer` with a unit template, so the
+provisioner runs it like any engine, plus `seed(users, groups)` against Keycloak's admin API (realm, groups, users,
+the gateway as a resource client with audience mapper).
 
 ### Identity adapters in the gateway
 
@@ -298,7 +302,7 @@ identity:
   # mode: none              # one user at home: no tokens, gateway on 127.0.0.1
   # principal: { subject: me, groups: [everyone, admin] }
   # mode: builtin           # the stack runs an authorization server as a unit
-  # server: { type: keycloak }
+  # server: { type: keycloak }                          # decided: Keycloak is the first builtin adapter
   # users: [{ name: alice, groups: [payments-team] }]   # seeded once; passkey set at first login
   # legacy: { type: trusted_headers, user_header: X-Forwarded-User, groups_header: X-Forwarded-Groups }
 policy:
@@ -408,9 +412,8 @@ for each vertical slice below.
 
 - ~~Unit granularity default~~ **Decided 2026-09-13**: configurable per engine and per scope (`scope` | `repo`),
   branches per repository (section 5).
-- **Builtin authorization server**: Keycloak, Authentik or Ory, verified against the CIMD / passkey / RFC 8707
-  checklist in section 6 before the choice is final. If your org already runs an IdP, name it so the JWT adapter is
-  verified against the real claim shape too.
+- ~~Builtin authorization server~~ **Decided 2026-09-13**: Keycloak first (section 6); RFC 8707 and CIMD verified
+  during the identity slice, CIMD-to-DCR shim in the gateway if needed.
 - **Docs default engine**: keep LightRAG, or make retrieval-only the default and LightRAG the opt-in? The latter makes
   first deployments cheap and matches what you asked for earlier.
 - **Language of the Kubernetes provisioner**: Python `kopf` first, Go later, or Go from the start?
