@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from typing import Any
 import yaml
 from ...core.contracts.provision import Endpoint, JobSpec, Provisioner, UnitRef, UnitSpec, UnitStatus
-from ...provision.common import (IDLE_TTL_ANNOTATION, LAST_USED_ANNOTATION, PORT_LABEL, k8s_labels, labels_for,
+from ...provision.common import (IDLE_TTL_ANNOTATION, LAST_USED_ANNOTATION, PORT_LABEL, k8s_labels, labels_for, unit_ports_from_env,
                                  parse_ttl, resources_for, volume_key)
 from ...provision.plan import CONFIG_MOUNT, PLUGINS_MOUNT
 
@@ -80,6 +80,8 @@ class Adapter(Provisioner):
 
     def _load_ports(self) -> None:
         self._ports_loaded = True
+        for name, port in unit_ports_from_env().items():   # inside the stack: the provisioner's table
+            self.ports.setdefault(name, port)
         for f in self.output_dir.glob("*.yaml") if self.output_dir.is_dir() else []:
             try:
                 for doc in yaml.safe_load_all(f.read_text()):

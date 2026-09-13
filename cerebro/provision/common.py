@@ -1,11 +1,27 @@
 """Helpers both renderers share: physical volume names, labels, TTL parsing."""
 from __future__ import annotations
-import re
+import os, re
 from ..core.contracts.provision import JobSpec, UnitSpec, VolumeSpec
 
 PROJECT_LABEL, SCOPE_LABEL, ROLE_LABEL = "cerebro.io/project", "cerebro.io/scope", "cerebro.io/role"
 PORT_LABEL, IDLE_TTL_ANNOTATION, LAST_USED_ANNOTATION = "cerebro.io/port", "cerebro.io/idle-ttl", "cerebro.io/last-used"
+UNIT_PORTS_ENV = "CEREBRO_UNIT_PORTS"      # "docs-public=9621,code-public=8045,memory=8888": the plan's unit -> http port table
 _TTL = re.compile(r"^\s*(\d+)\s*([smhd]?)\s*$")
+
+
+def unit_ports_value(units) -> str:
+    """What the provisioner puts in $CEREBRO_UNIT_PORTS of the gateway and the ingest: they run inside the stack,
+    where neither the rendered compose file nor the manifests exist, yet their Locator must know every unit's port."""
+    return ",".join(f"{u.name}={u.http_port}" for u in units)
+
+
+def unit_ports_from_env(env: dict[str, str] | None = None) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for item in (os.environ if env is None else env).get(UNIT_PORTS_ENV, "").split(","):
+        name, _, port = item.strip().partition("=")
+        if name and port.strip().isdigit():
+            out[name] = int(port)
+    return out
 
 
 def volume_key(owner: UnitSpec | JobSpec, vol: VolumeSpec, unit_names: set[str] | None = None) -> str:

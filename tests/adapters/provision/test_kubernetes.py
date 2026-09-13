@@ -223,3 +223,10 @@ def test_kubectl_dry_run_accepts_the_kustomization(rendered):
     for line in ("deployment.apps/docs-public created", "statefulset.apps/postgres created", "cronjob.batch/index-code-public created",
                  "secret/cerebro-secrets created", "configmap/cerebro-config created", "persistentvolumeclaim/code-public-repos created"):
         assert line in res.stdout, line
+
+
+def test_endpoint_inside_the_cluster_comes_from_the_environment(ctx, tmp_path, monkeypatch):
+    from cerebro.adapters.provision import kubernetes
+    monkeypatch.setenv("CEREBRO_UNIT_PORTS", "docs-public=9621,memory=8888")
+    inside = kubernetes.Adapter({"output_dir": str(tmp_path / "nowhere")}, ctx)
+    assert inside.endpoint("docs-public").endswith(".svc:9621") and inside.endpoint("memory").endswith(".svc:8888")
