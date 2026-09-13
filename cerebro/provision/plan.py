@@ -102,7 +102,8 @@ def base_units(config: Config, engine_units: list[UnitSpec]) -> list[UnitSpec]:
     engines = [u.name for u in engine_units]
     units.append(UnitSpec(
         name="gateway", role="gateway", image=GATEWAY_IMAGE, build=GATEWAY_BUILD,
-        ports=[PortSpec(port=config.gateway.port)], env={**common_env, "PORT": str(config.gateway.port)},
+        ports=[PortSpec(port=config.gateway.port)],
+        env={**common_env, "PORT": str(config.gateway.port), "CEREBRO_GATEWAY_BIND": "0.0.0.0"},
         secret_env=list(config.secrets.keys), depends_on=["postgres", *engines], labels=dict(labels)))
     units.append(UnitSpec(
         name="ingest", role="ingest", image=INGEST_IMAGE, build=INGEST_BUILD, ports=[PortSpec(port=8080)],

@@ -21,6 +21,7 @@ import asyncio
 import functools
 import json
 import logging
+import os
 import re
 import time
 from typing import Any
@@ -58,6 +59,7 @@ INSTRUCTIONS = """Organisation context server. Use it before guessing.
 Never retain content from restricted documents into a team bank. Prefer citing sources returned by query_docs."""
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True)
+BIND_ENV = "CEREBRO_GATEWAY_BIND"          # set by the provisioner on the gateway unit: listen on 0.0.0.0
 
 
 # ----------------------------------------------------------------------------------------------- helpers
@@ -189,6 +191,16 @@ class Gateway:
         if ident.mode == "none" and not ident.allow_remote:
             return "127.0.0.1"
         return self.config.gateway.host
+
+    def bind_host(self) -> str:
+        """Address uvicorn listens on. `gateway.host` is where clients reach the gateway (the address the provisioner
+        publishes the port on); inside a workload the process itself must listen on every interface or the published
+        port / Service never reaches it, which the provisioner signals with $CEREBRO_GATEWAY_BIND. Mode none without
+        allow_remote stays on loopback whatever the environment says."""
+        ident = self.config.identity
+        if ident.mode == "none" and not ident.allow_remote:
+            return "127.0.0.1"
+        return os.environ.get(BIND_ENV) or self.config.gateway.host
 
     def _transport_security(self) -> TransportSecuritySettings | None:
         """FastMCP's DNS-rebinding protection (Host header allowlist) only fits the loopback case; behind a proxy

@@ -115,6 +115,15 @@ async def test_mode_none_binds_loopback_and_refuses_remote_peers(make_config, ma
         assert not err and me["subject"] == "me"
 
 
+def test_bind_host_follows_the_provisioner_but_never_for_loopback_only_mode(make_config, make_ctx, monkeypatch):
+    gw = make_gateway(make_config, make_ctx)                          # static tokens, gateway.host 127.0.0.1
+    assert gw.bind_host() == "127.0.0.1"
+    monkeypatch.setenv("CEREBRO_GATEWAY_BIND", "0.0.0.0")
+    assert gw.bind_host() == "0.0.0.0" and gw.host == "127.0.0.1", "clients still reach it at gateway.host"
+    local = make_gateway(make_config, make_ctx, identity={"mode": "none"})
+    assert local.bind_host() == "127.0.0.1", "mode none without allow_remote ignores the environment"
+
+
 # ------------------------------------------------------------------------------------------------- grants
 async def test_whoami_and_list_scopes_follow_the_policy(gateway):
     async with session(gateway, "tok-alice") as s:
