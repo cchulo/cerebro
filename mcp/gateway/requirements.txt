@@ -1,6 +1,0 @@
-# mcp 2.x renamed FastMCP -> MCPServer and changed the API; this gateway targets the 1.x FastMCP API.
-mcp>=1.30,<2
-httpx>=0.27
-pyyaml>=6
-uvicorn>=0.30
-markdownify>=0.13
