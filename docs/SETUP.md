@@ -110,8 +110,9 @@ contains, read from `deploy/generated/compose.yaml`:
 - Health checks: `pg_isready` and `ollama list` for the base units; an HTTP probe on `/health` for the rest (compose
   tries curl, wget, then python3 inside the image).
 
-In identity mode `none` the gateway binds the container's loopback and the published port answers nothing; use
-`allow_remote` with `CEREBRO_TOKEN` and `gateway.host: 0.0.0.0` as in the README, or a real identity mode.
+In identity mode `none` a request arriving through the published port comes from the container network, which the
+adapter does not treat as loopback yet; use `allow_remote` with `CEREBRO_TOKEN` as in the README (keeping
+`gateway.host: 127.0.0.1`), or a real identity mode. Do not widen `gateway.host` to `0.0.0.0` to get around it.
 
 ## 6. Kubernetes
 

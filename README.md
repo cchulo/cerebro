@@ -38,9 +38,11 @@ are built from this repository.
 
 ## Quick start: one person, one machine
 
-Identity mode `none` means no tokens and no login. Inside a container that mode binds the gateway to the
-container's own loopback, which the host cannot reach, so the compose path uses `allow_remote` with a static token
-(verified against the built image; see [docs/IDENTITY.md](docs/IDENTITY.md)).
+Identity mode `none` means no tokens and no login. Keep `gateway.host: 127.0.0.1` (the default): that is the host
+interface the port is published on, so only this machine can reach the gateway. Never set it to `0.0.0.0`; that
+publishes the gateway on every interface of the machine. Inside the container the provisioner sets the bind address
+itself. Until mode `none` recognises the container network as local, the compose path also needs `allow_remote`
+with a static token (see [docs/IDENTITY.md](docs/IDENTITY.md)).
 
 ```sh
 uv venv .venv && uv pip install -e '.[all]'         # Python 3.12+
@@ -48,9 +50,10 @@ cp cerebro.example.yaml cerebro.yaml
 cp secrets.env.example secrets.env                 # fill POSTGRES_PASSWORD, LIGHTRAG_API_KEY, HINDSIGHT_API_KEY, CEREBRO_TOKEN
 ```
 
-In `cerebro.yaml` set `identity.allow_remote: true`, `gateway.host: 0.0.0.0` (the port is then published on every
-interface of the machine; the token is what guards it), add `CEREBRO_TOKEN` to `secrets.keys`, trim `scopes:` to what
-you have, and turn off the Confluence upstream if you have no Confluence (`sources: { confluence: { live: { enabled: false } } }`).
+In `cerebro.yaml` set `identity.allow_remote: true`, leave `gateway.host` at `127.0.0.1`, add `CEREBRO_TOKEN` to
+`secrets.keys`, trim `scopes:` to what you have, and turn off the Confluence upstream if you have no Confluence
+(`sources: { confluence: { live: { enabled: false } } }`). Every request then needs `Authorization: Bearer <CEREBRO_TOKEN>`,
+loopback included.
 
 ```sh
 .venv/bin/cerebro validate                          # the resolved scopes and code units

@@ -17,15 +17,19 @@ security model. The adapters are in `cerebro/adapters/identity/`, the mode-to-ad
 ## Mode `none`: one person, one machine
 
 Every request is `identity.principal` (default `{subject: local, groups: [everyone, admin]}`) with every token scope.
-The gateway binds `127.0.0.1` whatever `gateway.host` says, and the adapter refuses a request whose peer address is not
-loopback. Verified in the built image: inside a container this means the container's own loopback, so a published
-port answers nothing.
+The adapter refuses a request whose peer address is not loopback. Run as a bare process the gateway listens on
+`127.0.0.1` whatever `gateway.host` says. Run as a compose or Kubernetes workload the provisioner sets the container's
+bind address (`CEREBRO_GATEWAY_BIND`) and publishes the port on `gateway.host`, `127.0.0.1` by default; keep it there.
+`0.0.0.0` as `gateway.host` publishes the gateway on every interface of the machine and is never the right setting for
+one person on one machine. Inside a container the peer of a published-port request is the container network, not
+loopback, so mode `none` refuses it until the trusted-network fix lands.
 
 `identity.allow_remote: true` lifts both rules and adds one: every request, loopback included (a same-host proxy
 cannot bypass it), must carry `Authorization: Bearer <value of the secret named identity.static_token_env>` (default
-`CEREBRO_TOKEN`); an empty secret is a 401, not an open door. `gateway.host` then decides the bind address and, on
-compose, the host interface the port is published on (`0.0.0.0:8090:8090` with `gateway.host: 0.0.0.0`). Verified:
-401 without the token, MCP `initialize` with it, `/.well-known/oauth-protected-resource` is 404 in this mode.
+`CEREBRO_TOKEN`); an empty secret is a 401, not an open door. `gateway.host` stays the publish address: leave it at
+`127.0.0.1` unless other machines on your network must reach the gateway, and then pair the wider interface with a
+strong token. Verified: 401 without the token, MCP `initialize` with it, `/.well-known/oauth-protected-resource` is
+404 in this mode.
 
 ## Mode `static`: tests and demos
 
