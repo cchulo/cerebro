@@ -275,7 +275,16 @@ candidates (DCR, passkeys, OIDC, fine-grained admin all known to work) and the o
 its footprint (about 1 GB RAM) costs teams, not home users, who run `mode: none`. Authentik and Ory Hydra with Kratos
 remain possible second adapters. Two things to verify during the identity slice: RFC 8707 resource indicators on the
 pinned Keycloak version, and CIMD; if Keycloak lacks CIMD, the gateway serves a small CIMD-to-DCR shim so spec-following
-MCP clients still register without manual steps. The adapter is `AuthorizationServer` with a unit template, so the
+MCP clients still register without manual steps.
+
+Verified 2026-09-13 against Keycloak 26.7.3 (`cerebro/adapters/auth/keycloak.py` has the quotes and URLs):
+RFC 8707 is **not supported**; Keycloak's MCP guide says it "cannot recognize resource parameter" and rates MCP
+2025-06-18 and later "Partially Supported without Resource Indicators". Its documented substitute is an Audience
+mapper on each client scope whose custom audience is the MCP server URL, so `aud` still equals the gateway's resource
+id; `seed()` does exactly that for every `cerebro:*` scope and the gateway keeps validating `aud`. CIMD is
+**experimental** since 26.6.0 behind `--features=cimd` plus a client profile/policy, which `seed()` sets up when
+`identity.server.options.features` includes `cimd` and `cimd_trusted_domains` is given; the CIMD-to-DCR shim stays
+the fallback. Anonymous RFC 7591 registration is enabled for loopback redirect URIs only. The adapter is `AuthorizationServer` with a unit template, so the
 provisioner runs it like any engine, plus `seed(users, groups)` against Keycloak's admin API (realm, groups, users,
 the gateway as a resource client with audience mapper).
 

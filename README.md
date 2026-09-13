@@ -25,3 +25,4 @@ Adapters on `main` so far (all tested against mocked engines; none verified agai
 | memory | `hindsight` | Hindsight 0.9.2 (`ghcr.io/vectorize-io/hindsight:0.9.2`), v1 wire calls, bank-addressed | `memory` (port 8888, secrets `HINDSIGHT_API_KEY`, `POSTGRES_PASSWORD`) |
 | inference | `openai_compat` | any OpenAI `/v1` chat + embeddings server (`/v1` appended for provider ollama), key from `api_key_env` | none |
 | inference | `ollama` | Ollama native `/api/chat`, `/api/embed`, `/api/tags` | none |
+| auth | `keycloak` | Keycloak 26.7.3 as the `builtin` authorization server; `seed()` creates realm, groups, users, token scopes with audience mappers, the `cerebro-mcp` PKCE client and loopback-only anonymous DCR | `auth` (port 8080, secrets `POSTGRES_PASSWORD`, `CEREBRO_AUTH_ADMIN_USER`, `CEREBRO_AUTH_ADMIN_PASSWORD`; `CEREBRO_SEED_PASSWORD` optional) |

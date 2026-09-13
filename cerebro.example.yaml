@@ -17,6 +17,7 @@ identity:
   # token_validation: jwks          # jwks | introspection
   # mode: builtin
   # server: { type: keycloak, realm: cerebro, public_url: http://localhost:8180 }
+  #   options: { features: [cimd], cimd_trusted_domains: ["*.example.org"] }   # optional; see cerebro/adapters/auth/keycloak.py
   # users:
   #   - { name: alice, groups: [payments-team] }
   #   - { name: bob,   groups: [sre] }
