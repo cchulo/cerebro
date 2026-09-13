@@ -20,8 +20,10 @@ ingest = ["fastapi>=0.110", "uvicorn>=0.30", "apscheduler>=3.10,<4", "psycopg[bi
 kubernetes = ["kopf>=1.37", "kubernetes>=29"]
 # the pgvector docs adapter
 pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.3"]
+# the stdio-to-HTTP bridge that runs inside engine unit images (images/code-unit)
+bridge = ["mcp>=1.10,<2", "uvicorn>=0.30", "starlette>=0.37"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21", "jsonschema>=4", "mcp>=1.10,<2"]
-all = ["cerebro[gateway,ingest,kubernetes,pgvector,dev]"]
+all = ["cerebro[gateway,ingest,kubernetes,pgvector,bridge,dev]"]
 
 [project.scripts]
 cerebro = "cerebro.cli:main"
